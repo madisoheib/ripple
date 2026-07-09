@@ -1,0 +1,21 @@
+services:
+  resonance:
+    image: resonance:qa
+    ports:
+      - "8080:8080"
+
+  app:
+    build:
+      context: ../..
+      dockerfile: qa/laravel/Dockerfile
+    depends_on:
+      - resonance
+    environment:
+      # Docker env wins over .env (Dotenv doesn't override real env vars).
+      BROADCAST_CONNECTION: resonance
+      RESONANCE_HOST: resonance
+      RESONANCE_PORT: "8080"
+      RESONANCE_SCHEME: http
+      RESONANCE_APP_ID: app1
+      RESONANCE_KEY: resonance-key
+      RESONANCE_SECRET: resonance-secret

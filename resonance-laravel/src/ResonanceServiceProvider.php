@@ -14,6 +14,14 @@ class ResonanceServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/resonance.php', 'resonance');
+
+        // Register the broadcast connection so users only set
+        // BROADCAST_CONNECTION=resonance — no editing of config/broadcasting.php.
+        $config = $this->app['config'];
+        $config->set('broadcasting.connections.resonance', array_merge(
+            ['driver' => 'resonance'],
+            $config->get('broadcasting.connections.resonance', []),
+        ));
     }
 
     public function boot(): void
