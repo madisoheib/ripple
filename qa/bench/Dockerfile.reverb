@@ -2,7 +2,10 @@
 # laravel-app image and just adds Reverb. Reverb also speaks the Pusher protocol,
 # so the same bench client hits it unchanged.
 FROM laravel-app
-# Reverb needs pcntl/posix/sockets for its event loop + signal handling.
-RUN install-php-extensions pcntl posix sockets \
+# pcntl/posix/sockets: event loop + signals. ev: without it ReactPHP falls back
+# to stream_select() and hard-caps at ~1024 fds (~1k connections) — production
+# Reverb needs a real event backend to go beyond.
+RUN install-php-extensions pcntl posix sockets ev \
     && composer require laravel/reverb --no-interaction
-CMD ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+# Production guidance for Reverb: unlimited memory_limit for the long-running server.
+CMD ["php", "-d", "memory_limit=-1", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]

@@ -33,7 +33,9 @@ function pct(arr, q) {
 // One raw client. onEvent(evName, parsedData) fires for app events.
 function connect(onEvent) {
   const ws = new WebSocket(url, { perMessageDeflate: false });
-  const c = { ws, established: false, subscribed: false };
+  const c = { ws, established: false, subscribed: false, failed: false };
+  ws.on("error", () => { c.failed = true; }); // refused/reset under load — count, don't crash
+  ws.on("close", () => { if (!c.established) c.failed = true; });
   ws.on("message", (buf) => {
     let f; try { f = JSON.parse(buf.toString()); } catch { return; }
     if (f.event === "pusher:connection_established") c.established = true;
@@ -44,19 +46,26 @@ function connect(onEvent) {
   return c;
 }
 
-// Connect n clients in batches; resolve once all established.
+// Connect n clients in batches. Failures (refused/reset/timeout) are counted,
+// not fatal — returns only the established clients and reports the shortfall.
 async function connectAll(n, onEvent) {
   const clients = [];
+  let failed = 0;
   for (let i = 0; i < n; i += 100) {
     const batch = [];
     for (let j = i; j < Math.min(i + 100, n); j++) batch.push(connect(onEvent));
     clients.push(...batch);
-    await Promise.all(batch.map((c) => new Promise((res, rej) => {
-      const to = setTimeout(() => rej(new Error("connect timeout")), 15000);
-      const iv = setInterval(() => { if (c.established) { clearInterval(iv); clearTimeout(to); res(); } }, 20);
+    await Promise.all(batch.map((c) => new Promise((res) => {
+      const to = setTimeout(() => { c.failed = true; res(); }, 15000);
+      const iv = setInterval(() => {
+        if (c.established || c.failed) { clearInterval(iv); clearTimeout(to); res(); }
+      }, 20);
     })));
+    failed = clients.filter((c) => c.failed).length;
   }
-  return clients;
+  const ok = clients.filter((c) => c.established && !c.failed);
+  if (ok.length < n) console.error(`  warn: only ${ok.length}/${n} connected (${failed} failed)`);
+  return ok;
 }
 
 async function subscribeAll(clients, channel) {
