@@ -14,30 +14,46 @@ No Redis, no Node, no PHP extensions — download one binary and run it.
 ./resonance start --config resonance.toml
 ```
 
-## Why
+## How it compares
+
+### The market
 
 | | Pusher / Ably | Laravel Reverb | Soketi | **Resonance** |
 |---|---|---|---|---|
-| Self-hosted | ❌ SaaS | ✅ | ✅ | ✅ |
-| Runtime needed | — | PHP (+ ext-ev beyond ~1k conns) | Node.js | **none** |
-| Uses all CPU cores | — | ❌ single core | ❌ single core/worker | ✅ |
-| Install | account | composer + ext tuning | npm | **one binary** |
+| Model | SaaS (paid per connection/message) | self-hosted | self-hosted | **self-hosted** |
+| Runtime required | — | PHP + `ext-ev`/`ext-uv` beyond ~1k conns | Node.js | **none — static binary** |
+| Language / concurrency | — | PHP, single-threaded event loop | JS (µWebSockets core), 1 worker/core with adapter | **Rust, all cores natively** |
+| Horizontal scaling deps | managed | Redis for multi-server | Redis for multi-server | none needed at target scale (v2: optional) |
+| Pusher protocol | ✅ origin | ✅ | ✅ | ✅ |
+| Install | account + latency to their region | composer + PHP tuning | npm / Docker | **one binary / `FROM scratch` Docker (~5 MB)** |
+| Slow-client protection | managed | ❌ unbounded buffering | partial (backpressure config) | ✅ bounded buffers + disconnect |
+| Status | commercial | active (Laravel official) | maintenance slowed since 2024 | early (v0) |
 
-Measured on the same host, same scenario, 1 000 connections
-(scripts in [`qa/bench/`](qa/bench), reproduce before quoting):
+### Measured head-to-head — Resonance vs Reverb
+
+Same host, same scenario, same client, 1 000 connections. Scripts in
+[`qa/bench/`](qa/bench) — reproduce before quoting. Soketi is not in the table
+because we haven't benchmarked it yet on this harness; we don't publish
+numbers we didn't measure.
 
 | Metric | Resonance | Reverb (tuned¹) |
 |---|---|---|
-| Idle memory | **17 MiB** (~16 KB/conn) | 55 MiB (~22 KB/conn) |
-| Fan-out latency p50 / p99 | **21 / 27 ms** | 39 / 45 ms |
-| CPU @ 20k deliveries/s | **22 %** | 35 % |
-| Sustained p50 | **8.5 ms** | 13.9 ms |
-| Slow consumer | disconnected, memory bounded | unbounded buffering |
-| Stock install beyond 1k conns | ✅ | ❌ dies (stream_select fd cap) |
+| Baseline memory (0 conns) | **0.9 MiB** | 33 MiB |
+| Idle memory @ 1k conns | **17 MiB** (~16 KB/conn) | 55 MiB (~22 KB/conn) |
+| Idle memory @ 5k conns | **83 MiB** | 142 MiB |
+| Fan-out latency p50 / p99 (1k subs) | **21 / 27 ms** | 39 / 45 ms |
+| Fan-out latency p50 (5k subs) | **48 ms** | 91 ms |
+| CPU @ 20 000 deliveries/s | **22 % avg** | 35 % avg |
+| Sustained broadcast p50 | **8.5 ms** (stable at all tested rates) | 13.9 ms |
+| Slow consumer under flood | disconnected, memory stays bounded | buffers unbounded — p99 reached 209 s |
+| Stock install at 5k conns | ✅ no tuning | ❌ dies at ~1k (`stream_select` fd cap) |
 
-¹ *Reverb required `ext-ev`, `memory_limit=-1` and connection-limit tuning to
-complete the 5k test; Resonance ran stock. Numbers are relative to this
-hardware — run the benchmark on yours.*
+¹ *Reverb needed `ext-ev`, `memory_limit=-1` and a raised connection limit to
+complete the 5k test; Resonance ran stock. Absolute numbers are specific to
+this hardware (Docker on an 8-core host) — treat them as relative. CPU-core
+ceilings (Reverb: one core; Resonance: all cores) only diverge further at
+scales this harness can't generate; large-scale Linux results will be
+published when available.*
 
 ## Quick start
 

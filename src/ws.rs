@@ -19,10 +19,7 @@ pub async fn handle(ws: WebSocket, state: Arc<State>, app: App) {
 
     let (tx, rx) = mpsc::channel::<Message>(64);
     let kill = Arc::new(Notify::new());
-    state.connections.insert(
-        socket_id.clone(),
-        Conn { kill: kill.clone(), app_id: app.id.clone() },
-    );
+    state.connections.insert(socket_id.clone(), Conn { app_id: app.id.clone() });
 
     // Handshake: activity_timeout advertised to the client.
     let est = serde_json::json!({
@@ -157,11 +154,9 @@ async fn subscribe(
         return;
     }
 
-    if channel.starts_with("private-") || channel.starts_with("private-encrypted-") {
-        if !auth_ok(app, socket_id, &channel, &data) {
-            let _ = tx.send(error_frame(4009, "Connection not authorized")).await;
-            return;
-        }
+    if channel.starts_with("private-") && !auth_ok(app, socket_id, &channel, &data) {
+        let _ = tx.send(error_frame(4009, "Connection not authorized")).await;
+        return;
     }
 
     state

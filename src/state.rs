@@ -26,7 +26,6 @@ pub struct Limits {
 }
 
 pub struct Conn {
-    pub kill: Arc<Notify>,
     pub app_id: String,
 }
 
