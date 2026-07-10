@@ -3,7 +3,6 @@
     "description": "Laravel broadcasting driver + CLI for the resonance WebSocket server (Pusher-compatible).",
     "license": "MIT",
     "keywords": ["laravel", "broadcasting", "websockets", "pusher", "realtime"],
-    "version": "0.1.0",
     "require": {
         "php": ">=8.1",
         "illuminate/broadcasting": "*",
