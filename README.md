@@ -129,11 +129,13 @@ $pusher->trigger('my-channel', 'my-event', ['hello' => 'world']);
   `GET channels/{name}/users`
 - Sender exclusion via `socket_id`
 - Origin allow-list for browser connections (`allowed_origins`)
+- **Webhooks** (`channel_occupied` / `channel_vacated` / `member_added` /
+  `member_removed`), Pusher format: signed `X-Pusher-Key` + `X-Pusher-Signature`
 - Slow-consumer protection: bounded per-connection buffers, non-blocking fan-out,
   laggards are disconnected instead of degrading everyone else
 - Dead-connection eviction (server ping after `activity_timeout`, 30 s grace)
 
-Webhooks and native TLS are on the [roadmap](project.md).
+Native TLS (rustls) is on the [roadmap](project.md) — terminate at your proxy meanwhile.
 
 ## Deployment
 

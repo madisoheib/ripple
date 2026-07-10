@@ -191,13 +191,17 @@ async fn subscribe(
         return;
     }
 
-    state
-        .channels
-        .entry((app.id.clone(), channel.clone()))
-        .or_default()
-        .subscribers
-        .insert(socket_id.to_string(), Sub { tx: tx.clone(), kill: kill.clone() });
+    let first = {
+        let mut e = state.channels.entry((app.id.clone(), channel.clone())).or_default();
+        let first = e.subscribers.is_empty();
+        e.subscribers
+            .insert(socket_id.to_string(), Sub { tx: tx.clone(), kill: kill.clone() });
+        first
+    };
     subs.insert(channel.clone());
+    if first {
+        state.webhook(&app.id, serde_json::json!({"name": "channel_occupied", "channel": channel}));
+    }
 
     let _ = tx
         .send(frame("pusher_internal:subscription_succeeded", Some(&channel), "{}".into()))
@@ -247,8 +251,9 @@ async fn subscribe_presence(
 
     // Insert member + build the roster and member_added targets under one
     // short lock, send after release.
-    let (roster, added_msg_targets) = {
+    let (roster, added_msg_targets, first, is_new_user) = {
         let mut e = state.channels.entry((app.id.clone(), channel.to_string())).or_default();
+        let first = e.subscribers.is_empty();
         e.subscribers
             .insert(socket_id.to_string(), Sub { tx: tx.clone(), kill: kill.clone() });
         let presence = e.presence.get_or_insert_with(std::collections::HashMap::new);
@@ -278,9 +283,18 @@ async fn subscribe_presence(
         } else {
             Vec::new()
         };
-        (roster, targets)
+        (roster, targets, first, is_new_user)
     };
     subs.insert(channel.to_string());
+    if first {
+        state.webhook(&app.id, serde_json::json!({"name": "channel_occupied", "channel": channel}));
+    }
+    if is_new_user {
+        state.webhook(
+            &app.id,
+            serde_json::json!({"name": "member_added", "channel": channel, "user_id": user_id}),
+        );
+    }
 
     let _ = tx
         .send(frame("pusher_internal:subscription_succeeded", Some(channel), roster.to_string()))
@@ -374,6 +388,7 @@ fn auth_ok(
 fn remove_sub(state: &State, app_id: &str, channel: &str, socket_id: &str) {
     let key: ChannelKey = (app_id.to_string(), channel.to_string());
     let mut removed_member: Option<(String, Vec<Sub>)> = None;
+    let mut vacated = false;
     if let Some(mut e) = state.channels.get_mut(&key) {
         e.subscribers.remove(socket_id);
         // Presence: emit member_removed only when the user's LAST socket leaves.
@@ -388,6 +403,7 @@ fn remove_sub(state: &State, app_id: &str, channel: &str, socket_id: &str) {
         if e.subscribers.is_empty() {
             drop(e);
             state.channels.remove(&key);
+            vacated = true;
         }
     }
     if let Some((user_id, targets)) = removed_member {
@@ -398,6 +414,13 @@ fn remove_sub(state: &State, app_id: &str, channel: &str, socket_id: &str) {
                 s.kill.notify_one();
             }
         }
+        state.webhook(
+            app_id,
+            serde_json::json!({"name": "member_removed", "channel": channel, "user_id": user_id}),
+        );
+    }
+    if vacated {
+        state.webhook(app_id, serde_json::json!({"name": "channel_vacated", "channel": channel}));
     }
 }
 

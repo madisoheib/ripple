@@ -17,6 +17,7 @@ pub struct App {
     pub key: String,
     pub secret: String,
     pub max_connections: usize, // 0 = unlimited
+    pub webhook_url: Option<String>,
 }
 
 pub struct Limits {
@@ -56,17 +57,33 @@ pub struct ChannelState {
     pub presence: Option<HashMap<String, PresenceMember>>,
 }
 
+pub struct WebhookEvent {
+    pub app_id: String,
+    pub event: serde_json::Value,
+}
+
 pub struct State {
     pub apps: Vec<App>, // a handful, from config — linear scan is fine
     pub connections: DashMap<String, Conn>,
     pub channels: DashMap<ChannelKey, ChannelState>,
     pub limits: Limits,
+    pub webhooks: Option<mpsc::Sender<WebhookEvent>>,
     socket_seq: AtomicU64,
     socket_hi: u64,
 }
 
 impl State {
-    pub fn new(apps: Vec<App>, limits: Limits) -> Arc<Self> {
+    /// Enqueue a webhook if the app has a webhook_url. Non-blocking: a full
+    /// queue drops the event (webhooks are best-effort notifications).
+    pub fn webhook(&self, app_id: &str, event: serde_json::Value) {
+        if let Some(tx) = &self.webhooks {
+            if self.app_by_id(app_id).is_some_and(|a| a.webhook_url.is_some()) {
+                let _ = tx.try_send(WebhookEvent { app_id: app_id.to_string(), event });
+            }
+        }
+    }
+
+    pub fn new(apps: Vec<App>, limits: Limits, webhooks: Option<mpsc::Sender<WebhookEvent>>) -> Arc<Self> {
         // ponytail: socket_id hi part seeded from startup nanos; low part is a
         // counter. Unique per run, which is all a Pusher socket_id needs.
         let hi = SystemTime::now()
@@ -78,6 +95,7 @@ impl State {
             connections: DashMap::new(),
             channels: DashMap::new(),
             limits,
+            webhooks,
             socket_seq: AtomicU64::new(1),
             socket_hi: hi,
         })

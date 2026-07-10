@@ -67,6 +67,8 @@ struct AppCfg {
     secret: String,
     #[serde(default)]
     max_connections: usize,
+    #[serde(default)]
+    webhook_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -146,10 +148,16 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let apps = cfg
+    let apps: Vec<App> = cfg
         .apps
         .into_iter()
-        .map(|a| App { id: a.id, key: a.key, secret: a.secret, max_connections: a.max_connections })
+        .map(|a| App {
+            id: a.id,
+            key: a.key,
+            secret: a.secret,
+            max_connections: a.max_connections,
+            webhook_url: a.webhook_url,
+        })
         .collect();
     // RESONANCE_ALLOWED_ORIGINS="https://a.com,https://b.com" overrides config.
     if let Ok(v) = std::env::var("RESONANCE_ALLOWED_ORIGINS") {
@@ -162,7 +170,17 @@ async fn main() {
         allowed_origins: cfg.limits.allowed_origins,
         client_event_rate: cfg.limits.client_event_rate,
     };
-    let state = State::new(apps, limits);
+    // Webhook worker: only spawned if at least one app wants webhooks.
+    let webhook_tx = if apps.iter().any(|a| a.webhook_url.is_some()) {
+        // ponytail: bounded queue, drops on overflow, no retry — webhooks are
+        // best-effort notifications. Add retry/batching if consumers need it.
+        let (tx, rx) = tokio::sync::mpsc::channel::<state::WebhookEvent>(1024);
+        tokio::spawn(webhook_worker(rx, apps.clone()));
+        Some(tx)
+    } else {
+        None
+    };
+    let state = State::new(apps, limits, webhook_tx);
 
     let app = Router::new()
         .route("/app/{key}", get(ws_route))
@@ -184,6 +202,37 @@ async fn main() {
     });
     tracing::info!("resonance listening on {addr} ({} app(s))", state.apps.len());
     axum::serve(listener, app).await.unwrap();
+}
+
+/// Drains the webhook queue and POSTs Pusher-format webhooks:
+/// body {"time_ms":..., "events":[...]}, signed with X-Pusher-Key +
+/// X-Pusher-Signature (HMAC-SHA256 of the raw body).
+async fn webhook_worker(
+    mut rx: tokio::sync::mpsc::Receiver<state::WebhookEvent>,
+    apps: Vec<App>,
+) {
+    let client = reqwest::Client::new();
+    while let Some(ev) = rx.recv().await {
+        let Some(app) = apps.iter().find(|a| a.id == ev.app_id) else { continue };
+        let Some(url) = &app.webhook_url else { continue };
+        let time_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let body = serde_json::json!({"time_ms": time_ms, "events": [ev.event]}).to_string();
+        let signature = state::sign(app.secret.as_bytes(), body.as_bytes());
+        let res = client
+            .post(url)
+            .header("Content-Type", "application/json")
+            .header("X-Pusher-Key", &app.key)
+            .header("X-Pusher-Signature", signature)
+            .body(body)
+            .send()
+            .await;
+        if let Err(e) = res {
+            tracing::warn!("webhook delivery to {url} failed: {e}");
+        }
+    }
 }
 
 async fn ws_route(
