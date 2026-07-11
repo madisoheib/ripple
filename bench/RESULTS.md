@@ -30,9 +30,13 @@ Both idle at 0% CPU. Resonance memory is linear from 1k to 60k. The spec target
 | Resonance | 10,000/10,000 | **94 ms** | 139 ms |
 | Reverb | 10,000/10,000 | 122 ms | 164 ms |
 
-**Server-side vs end-to-end.** Resonance's `/metrics` exposes the pure
-distribution time (REST arrival -> last enqueue): **4.1 ms for 10,000
-targets** (~2.4M enqueues/s). The remaining ~90 ms of the end-to-end p50 is
+**Server-side vs end-to-end.** Resonance's `/metrics` exposes the
+distribution (enqueue) time — REST arrival -> last `try_send` returned:
+**4.1 ms for 10,000 targets** (~2.4M enqueues/s). Note this is a *lower
+bound* on server cost: at T2 the messages sit in per-connection queues and
+the writer tasks still have to drain them to the sockets. The true
+server-to-kernel time lies between 4.1 ms and what a two-machine benchmark
+will show. The remaining ~90 ms of the end-to-end p50 is
 socket-write scheduling plus the load generator draining 10k messages on the
 shared box — a control run with 4 client processes lowered p50 to ~50-70 ms.
 Treat the end-to-end absolutes as an upper bound dominated by the client;
