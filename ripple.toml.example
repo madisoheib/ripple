@@ -12,8 +12,8 @@ shutdown_timeout_s = 30
 
 [[apps]]
 id = "app1"
-key = "resonance-key"
-secret = "resonance-secret"
+key = "ripple-key"
+secret = "ripple-secret"
 max_connections = 0        # 0 = unlimited
 # webhook_url = "https://your-app.com/pusher/webhooks"   # channel_occupied/vacated, member_added/removed
 
@@ -24,7 +24,7 @@ max_connections = 0        # 0 = unlimited
 
 # Session-resume extension (opt-in, Pusher-compatible): keep the last N
 # events per channel; reconnecting clients replay what they missed with
-# {event:"resonance:resume", data:{channel, last_seq}}.
+# {event:"ripple:resume", data:{channel, last_seq}}.
 # history_size = 100
 
 [limits]

@@ -1,13 +1,13 @@
 #!/bin/sh
-# Resonance installer — one-liner for any project, Laravel or not:
-#   curl -sSL https://raw.githubusercontent.com/madisoheib/wrs-php/main/install.sh | sh
+# Ripple installer — one-liner for any project, Laravel or not:
+#   curl -sSL https://raw.githubusercontent.com/madisoheib/ripple/main/install.sh | sh
 # Detects OS/arch, downloads the matching static binary from GitHub Releases,
-# verifies its SHA-256, installs to ./bin/resonance (or $RESONANCE_INSTALL_DIR).
+# verifies its SHA-256, installs to ./bin/ripple (or $RIPPLE_INSTALL_DIR).
 set -eu
 
-REPO="madisoheib/wrs-php"
-VERSION="${RESONANCE_VERSION:-latest}"
-DIR="${RESONANCE_INSTALL_DIR:-./bin}"
+REPO="madisoheib/ripple"
+VERSION="${RIPPLE_VERSION:-latest}"
+DIR="${RIPPLE_INSTALL_DIR:-./bin}"
 
 os=$(uname -s)
 arch=$(uname -m)
@@ -22,7 +22,7 @@ case "$arch" in
   *) echo "Unsupported architecture: $arch"; exit 1 ;;
 esac
 
-asset="resonance-${arch_part}-${os_part}"
+asset="ripple-${arch_part}-${os_part}"
 if [ "$VERSION" = "latest" ]; then
   base="https://github.com/$REPO/releases/latest/download"
 else
@@ -45,8 +45,8 @@ fi
 [ "$expected" = "$actual" ] || { echo "Checksum mismatch — aborting."; exit 1; }
 
 mkdir -p "$DIR"
-mv "$tmp/$asset" "$DIR/resonance"
-chmod +x "$DIR/resonance"
+mv "$tmp/$asset" "$DIR/ripple"
+chmod +x "$DIR/ripple"
 
-echo "Installed: $DIR/resonance"
-"$DIR/resonance" --help >/dev/null 2>&1 && echo "OK — run: $DIR/resonance start --config resonance.toml"
+echo "Installed: $DIR/ripple"
+"$DIR/ripple" --help >/dev/null 2>&1 && echo "OK — run: $DIR/ripple start --config ripple.toml"

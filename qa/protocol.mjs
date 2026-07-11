@@ -4,9 +4,9 @@
 import PusherServer from "pusher";
 import WebSocket from "ws";
 
-const HOST = process.env.RESONANCE_HOST || "127.0.0.1";
-const PORT = Number(process.env.RESONANCE_PORT || 8080);
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const HOST = process.env.RIPPLE_HOST || "127.0.0.1";
+const PORT = Number(process.env.RIPPLE_PORT || 8080);
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 
 const server = new PusherServer({
   appId: APP.id, key: APP.key, secret: APP.secret,
@@ -89,7 +89,7 @@ async function main() {
   await step("private subscribe with bad auth -> pusher:error 4009", async () => {
     const c = client();
     await establish(c);
-    c.send({ event: "pusher:subscribe", data: { channel: "private-x", auth: "resonance-key:deadbeef" } });
+    c.send({ event: "pusher:subscribe", data: { channel: "private-x", auth: "ripple-key:deadbeef" } });
     const err = await c.waitFor((f) => f.event === "pusher:error", "error");
     if (err.parsed.code !== 4009) throw new Error(`expected 4009, got ${err.parsed.code}`);
     if (c.has((f) => f.event === "pusher_internal:subscription_succeeded")) throw new Error("must not subscribe");
@@ -181,7 +181,7 @@ async function main() {
   await step("presence: bad signature rejected", async () => {
     const c = client();
     const est = await establish(c);
-    c.send({ event: "pusher:subscribe", data: { channel: "presence-x", auth: "resonance-key:deadbeef", channel_data: '{"user_id":"u9"}' } });
+    c.send({ event: "pusher:subscribe", data: { channel: "presence-x", auth: "ripple-key:deadbeef", channel_data: '{"user_id":"u9"}' } });
     const err = await c.waitFor((f) => f.event === "pusher:error", "error");
     if (err.parsed.code !== 4009) throw new Error(`expected 4009, got ${err.parsed.code}`);
     c.close();

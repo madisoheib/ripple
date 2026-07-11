@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compare resonance vs Reverb on the same host: idle footprint, fan-out latency,
+# Compare ripple vs Reverb on the same host: idle footprint, fan-out latency,
 # sustained broadcast. Relative numbers only (Docker Desktop/Mac, not a t3.medium).
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -10,7 +10,7 @@ export BENCH_CONNS="$CONNS"
 cleanup() { docker compose down -v >/dev/null 2>&1; }
 trap cleanup EXIT
 
-docker image inspect resonance:qa >/dev/null 2>&1 || docker build -t resonance:qa "$ROOT" >/dev/null
+docker image inspect ripple:qa >/dev/null 2>&1 || docker build -t ripple:qa "$ROOT" >/dev/null
 if ! docker image inspect laravel-app >/dev/null 2>&1; then
   echo "building laravel-app image first..."
   docker build -t laravel-app -f "$ROOT/qa/laravel/Dockerfile" "$ROOT" >/dev/null
@@ -49,24 +49,24 @@ idle_stat() {
 
 echo ""
 echo "== SCENARIO A: idle connections =="
-RES_IDLE=$(idle_stat resonance bench-resonance-1)
+RES_IDLE=$(idle_stat ripple bench-ripple-1)
 REV_IDLE=$(idle_stat reverb    bench-reverb-1)
 MEM_RES=$(echo "$RES_IDLE" | cut -d'|' -f1); CPU_RES=$(echo "$RES_IDLE" | cut -d'|' -f2)
 MEM_REV=$(echo "$REV_IDLE" | cut -d'|' -f1); CPU_REV=$(echo "$REV_IDLE" | cut -d'|' -f2)
 
 echo ""
 echo "== SCENARIO C: fan-out latency (1 event -> $CONNS subs) =="
-FO_RES=$(node bench.mjs resonance fanout 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  resonance: $FO_RES"
+FO_RES=$(node bench.mjs ripple fanout 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  ripple: $FO_RES"
 FO_REV=$(node bench.mjs reverb    fanout 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  reverb:    $FO_REV"
 
 echo ""
 echo "== SCENARIO B: sustained broadcast (100 msg/s x 5s) =="
-SU_RES=$(node bench.mjs resonance sustained 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  resonance: $SU_RES"
+SU_RES=$(node bench.mjs ripple sustained 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  ripple: $SU_RES"
 SU_REV=$(node bench.mjs reverb    sustained 2>&1 | grep '^RESULT' | sed 's/^RESULT //'); echo "  reverb:    $SU_REV"
 
 echo ""
 echo "=================== COMPARISON (relative, same host) ==================="
-printf "%-22s | %-22s | %-22s\n" "metric" "resonance" "reverb"
+printf "%-22s | %-22s | %-22s\n" "metric" "ripple" "reverb"
 printf "%-22s-+-%-22s-+-%-22s\n" "----------------------" "----------------------" "----------------------"
 printf "%-22s | %-22s | %-22s\n" "idle mem ($CONNS conns)" "$MEM_RES" "$MEM_REV"
 printf "%-22s | %-22s | %-22s\n" "idle cpu" "$CPU_RES" "$CPU_REV"

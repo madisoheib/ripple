@@ -18,9 +18,9 @@ MATRIX=(
   "13|php:8.4-cli|laravel/laravel"
 )
 
-docker image inspect resonance:qa >/dev/null 2>&1 || docker build -t resonance:qa "$ROOT" >/dev/null
+docker image inspect ripple:qa >/dev/null 2>&1 || docker build -t ripple:qa "$ROOT" >/dev/null
 
-cleanup() { docker rm -f mx-resonance >/dev/null 2>&1; docker network rm mxnet >/dev/null 2>&1; }
+cleanup() { docker rm -f mx-ripple >/dev/null 2>&1; docker network rm mxnet >/dev/null 2>&1; }
 trap cleanup EXIT
 
 PASS=(); FAIL=()
@@ -37,16 +37,16 @@ for entry in "${MATRIX[@]}"; do
 
   cleanup
   docker network create mxnet >/dev/null 2>&1
-  docker run -d --name mx-resonance --network mxnet --network-alias resonance -p 8080:8080 resonance:qa >/dev/null
+  docker run -d --name mx-ripple --network mxnet --network-alias ripple -p 8080:8080 ripple:qa >/dev/null
   sleep 1
   node subscribe.mjs > /tmp/mx-sub.log 2>&1 &
   SUB=$!
   sleep 4
 
   docker run --rm --network mxnet \
-    -e BROADCAST_DRIVER=resonance -e BROADCAST_CONNECTION=resonance \
-    -e RESONANCE_HOST=resonance -e RESONANCE_PORT=8080 -e RESONANCE_SCHEME=http \
-    -e RESONANCE_APP_ID=app1 -e RESONANCE_KEY=resonance-key -e RESONANCE_SECRET=resonance-secret \
+    -e BROADCAST_DRIVER=ripple -e BROADCAST_CONNECTION=ripple \
+    -e RIPPLE_HOST=ripple -e RIPPLE_PORT=8080 -e RIPPLE_SCHEME=http \
+    -e RIPPLE_APP_ID=app1 -e RIPPLE_KEY=ripple-key -e RIPPLE_SECRET=ripple-secret \
     "laravel${ver}-app" php artisan tinker --execute "broadcast(new App\Events\TestEvent('hello-from-laravel'));" >/dev/null 2>&1
 
   if wait $SUB; then

@@ -7,7 +7,7 @@ import { createHmac } from "node:crypto";
 import PusherServer from "pusher";
 import WebSocket from "ws";
 
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 const server = new PusherServer({ appId: APP.id, key: APP.key, secret: APP.secret, host: "127.0.0.1", port: "8080", useTLS: false });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 

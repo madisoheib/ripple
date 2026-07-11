@@ -1,14 +1,14 @@
 <?php
 
-namespace Resonance\Laravel\Console;
+namespace Ripple\Laravel\Console;
 
 use Illuminate\Console\Command;
-use Resonance\Laravel\Platform;
+use Ripple\Laravel\Platform;
 
 class InstallCommand extends Command
 {
-    protected $signature = 'resonance:install {--version= : Release tag (default: config/latest)} {--force} {--no-env : Do not touch the .env file}';
-    protected $description = 'Download the resonance server binary and configure broadcasting in .env.';
+    protected $signature = 'ripple:install {--version= : Release tag (default: config/latest)} {--force} {--no-env : Do not touch the .env file}';
+    protected $description = 'Download the ripple server binary and configure broadcasting in .env.';
 
     public function handle(): int
     {
@@ -18,14 +18,14 @@ class InstallCommand extends Command
             return self::FAILURE;
         }
 
-        $bin = config('resonance.bin');
+        $bin = config('ripple.bin');
         if (is_file($bin) && ! $this->option('force')) {
             $this->info("Already installed at {$bin} (use --force to reinstall).");
             return self::SUCCESS;
         }
 
-        $repo = config('resonance.release.repo');
-        $version = $this->option('version') ?: config('resonance.release.version');
+        $repo = config('ripple.release.repo');
+        $version = $this->option('version') ?: config('ripple.release.version');
         $asset = Platform::assetName($target);
         $base = $version === 'latest'
             ? "https://github.com/{$repo}/releases/latest/download"
@@ -54,20 +54,20 @@ class InstallCommand extends Command
         @mkdir(dirname($bin), 0755, true);
         file_put_contents($bin, $binary);
         chmod($bin, 0755);
-        $this->info("Installed resonance to {$bin}");
+        $this->info("Installed ripple to {$bin}");
 
         if (! $this->option('no-env')) {
             $this->configureEnv();
         }
-        $this->info('Done. Run: php artisan resonance:start');
+        $this->info('Done. Run: php artisan ripple:start');
 
         return self::SUCCESS;
     }
 
     /**
-     * Point broadcasting at resonance and generate app credentials, so
-     * `resonance:start` + `broadcast()` work immediately after install.
-     * Existing RESONANCE_* values are never overwritten.
+     * Point broadcasting at ripple and generate app credentials, so
+     * `ripple:start` + `broadcast()` work immediately after install.
+     * Existing RIPPLE_* values are never overwritten.
      */
     private function configureEnv(): void
     {
@@ -93,14 +93,14 @@ class InstallCommand extends Command
         $this->info('Configuring .env:');
         // Both spellings so every Laravel version picks up the driver
         // (BROADCAST_DRIVER <= 10, BROADCAST_CONNECTION >= 11).
-        $set('BROADCAST_DRIVER', 'resonance', true);
-        $set('BROADCAST_CONNECTION', 'resonance', true);
-        $set('RESONANCE_APP_ID', 'app-' . bin2hex(random_bytes(4)), false);
-        $set('RESONANCE_KEY', bin2hex(random_bytes(16)), false);
-        $set('RESONANCE_SECRET', bin2hex(random_bytes(16)), false);
-        $set('RESONANCE_HOST', '127.0.0.1', false);
-        $set('RESONANCE_PORT', '8080', false);
-        $set('RESONANCE_SCHEME', 'http', false);
+        $set('BROADCAST_DRIVER', 'ripple', true);
+        $set('BROADCAST_CONNECTION', 'ripple', true);
+        $set('RIPPLE_APP_ID', 'app-' . bin2hex(random_bytes(4)), false);
+        $set('RIPPLE_KEY', bin2hex(random_bytes(16)), false);
+        $set('RIPPLE_SECRET', bin2hex(random_bytes(16)), false);
+        $set('RIPPLE_HOST', '127.0.0.1', false);
+        $set('RIPPLE_PORT', '8080', false);
+        $set('RIPPLE_SCHEME', 'http', false);
 
         file_put_contents($path, $env);
     }
@@ -112,7 +112,7 @@ class InstallCommand extends Command
             'follow_location' => 1,
             'timeout' => 120,
             'ignore_errors' => true,
-            'header' => "User-Agent: resonance-laravel\r\n",
+            'header' => "User-Agent: ripple-laravel\r\n",
         ]]);
         $body = @file_get_contents($url, false, $ctx);
         if ($body === false) {

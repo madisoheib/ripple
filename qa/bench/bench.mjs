@@ -1,14 +1,14 @@
 // Load harness — raw ws clients (light enough for ~1k conns), one scenario per run.
-// Usage: node bench.mjs <resonance|reverb> <idle|fanout|sustained>
+// Usage: node bench.mjs <ripple|reverb> <idle|fanout|sustained>
 // Both servers speak Pusher, so only host/port change between targets.
 import PusherServer from "pusher";
 import WebSocket from "ws";
 import { performance } from "node:perf_hooks";
 
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 const HOST = process.env.BENCH_HOST || "127.0.0.1";
 const TARGETS = {
-  resonance: { wsPort: Number(process.env.BENCH_PORT || 8080), restPort: process.env.BENCH_PORT || "8080" },
+  ripple: { wsPort: Number(process.env.BENCH_PORT || 8080), restPort: process.env.BENCH_PORT || "8080" },
   reverb: { wsPort: 8081, restPort: "8081" },
 };
 
@@ -16,7 +16,7 @@ const target = process.argv[2];
 const scenario = process.argv[3];
 const CONNS = Number(process.env.BENCH_CONNS || 1000);
 const t = TARGETS[target];
-if (!t || !scenario) { console.error("usage: node bench.mjs <resonance|reverb> <idle|fanout|sustained>"); process.exit(2); }
+if (!t || !scenario) { console.error("usage: node bench.mjs <ripple|reverb> <idle|fanout|sustained>"); process.exit(2); }
 
 const server = new PusherServer({
   appId: APP.id, key: APP.key, secret: APP.secret,

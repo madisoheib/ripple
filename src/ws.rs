@@ -148,9 +148,9 @@ async fn on_text(
             client_event(state, app, socket_id, tx, subs, &v).await;
         }
         // Session-resume extension (opt-in, apps with history_size > 0):
-        // {event:"resonance:resume", data:{channel, last_seq}} replays every
+        // {event:"ripple:resume", data:{channel, last_seq}} replays every
         // buffered event the client missed while disconnected.
-        "resonance:resume" => resume(state, app, tx, subs, &v).await,
+        "ripple:resume" => resume(state, app, tx, subs, &v).await,
         _ => {}
     }
 }
@@ -199,7 +199,7 @@ async fn resume(
 
     if gap {
         let d = serde_json::json!({"reason": "history_gap", "current_seq": current_seq}).to_string();
-        let _ = tx.send(frame("resonance:resume_failed", Some(&channel), d)).await;
+        let _ = tx.send(frame("ripple:resume_failed", Some(&channel), d)).await;
         return;
     }
     let replayed = replay.len();
@@ -207,7 +207,7 @@ async fn resume(
         let _ = tx.send(m).await;
     }
     let d = serde_json::json!({"replayed": replayed, "current_seq": current_seq}).to_string();
-    let _ = tx.send(frame("resonance:resume_ok", Some(&channel), d)).await;
+    let _ = tx.send(frame("ripple:resume_ok", Some(&channel), d)).await;
 }
 
 /// Fixed-window rate limiter — good enough for a per-connection cap.

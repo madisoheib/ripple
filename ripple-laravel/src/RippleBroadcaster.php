@@ -1,6 +1,6 @@
 <?php
 
-namespace Resonance\Laravel;
+namespace Ripple\Laravel;
 
 use Illuminate\Broadcasting\BroadcastException;
 use Illuminate\Broadcasting\Broadcasters\PusherBroadcaster;
@@ -14,7 +14,7 @@ use Illuminate\Support\Arr;
  * libs and fatals — this shim lets one package version cover Laravel 6-13
  * with whatever pusher version Composer resolves.
  */
-class ResonanceBroadcaster extends PusherBroadcaster
+class RippleBroadcaster extends PusherBroadcaster
 {
     /** @var bool|null Lazily-detected: does trigger() want an array 4th arg? */
     private $wantsParamsArray;
@@ -41,7 +41,7 @@ class ResonanceBroadcaster extends PusherBroadcaster
 
         // pusher-php-server <= 4 returns false on failure instead of throwing.
         if ($result === false) {
-            throw new BroadcastException('Failed to send event to the resonance server.');
+            throw new BroadcastException('Failed to send event to the ripple server.');
         }
     }
 }

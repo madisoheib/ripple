@@ -3,7 +3,7 @@
 // 1001 (not an abrupt 1006 TCP cut), (2) a message enqueued just before the
 // signal is still delivered BEFORE the close (FIFO flush), (3) the process
 // exits 0 within the drain timeout.
-// Usage: node shutdown.mjs /path/to/resonance [conns]   (default 5)
+// Usage: node shutdown.mjs /path/to/ripple [conns]   (default 5)
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,12 +11,12 @@ import { join } from "node:path";
 import PusherServer from "pusher";
 import WebSocket from "ws";
 
-const BIN = process.argv[2] || "./target/release/resonance";
+const BIN = process.argv[2] || "./target/release/ripple";
 const CONNS = Number(process.argv[3] || process.env.CONNS || 5);
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 
 const dir = mkdtempSync(join(tmpdir(), "res-shutdown-"));
-const cfg = join(dir, "resonance.toml");
+const cfg = join(dir, "ripple.toml");
 writeFileSync(cfg, `
 [server]
 host = "127.0.0.1"

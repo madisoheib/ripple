@@ -1,6 +1,6 @@
 <?php
 
-namespace Resonance\Laravel;
+namespace Ripple\Laravel;
 
 /**
  * Framework-free helpers so they can be unit-tested with plain `php` (no
@@ -40,10 +40,10 @@ class Platform
     /** Asset file name for a target (Windows binaries carry .exe). */
     public static function assetName(string $target): string
     {
-        return strpos($target, 'windows') !== false ? "resonance-{$target}.exe" : "resonance-{$target}";
+        return strpos($target, 'windows') !== false ? "ripple-{$target}.exe" : "ripple-{$target}";
     }
 
-    /** Render a server resonance.toml from the Laravel config array. */
+    /** Render a server ripple.toml from the Laravel config array. */
     public static function toml(array $c): string
     {
         $esc = fn ($v) => str_replace(['\\', '"'], ['\\\\', '\\"'], (string) $v);

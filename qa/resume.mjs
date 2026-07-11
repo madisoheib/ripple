@@ -3,10 +3,10 @@
 // max_presence_members=2, then verifies:
 //  1. broadcast frames carry a monotonically increasing `seq`
 //  2. a reconnecting client replays exactly the missed events (FIFO order)
-//  3. a gap beyond the ring buffer yields resonance:resume_failed
+//  3. a gap beyond the ring buffer yields ripple:resume_failed
 //  4. presence roster capped at 2 unique users (3rd gets 4100)
 //  5. app publish quota: burst of 30 triggers -> some 429s
-// Usage: node resume.mjs /path/to/resonance
+// Usage: node resume.mjs /path/to/ripple
 import { spawn } from "node:child_process";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,11 +14,11 @@ import { join } from "node:path";
 import PusherServer from "pusher";
 import WebSocket from "ws";
 
-const BIN = process.argv[2] || "./target/release/resonance";
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const BIN = process.argv[2] || "./target/release/ripple";
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 
 const dir = mkdtempSync(join(tmpdir(), "res-resume-"));
-const cfg = join(dir, "resonance.toml");
+const cfg = join(dir, "ripple.toml");
 writeFileSync(cfg, `
 [server]
 host = "127.0.0.1"
@@ -91,8 +91,8 @@ await step("reconnect replays missed events in order", async () => {
   const b = await client();
   b.send({ event: "pusher:subscribe", data: { channel: "hist" } });
   await b.waitFor((f) => f.event === "pusher_internal:subscription_succeeded", "resub");
-  b.send({ event: "resonance:resume", data: { channel: "hist", last_seq: 2 } });
-  const ok = await b.waitFor((f) => f.event === "resonance:resume_ok", "resume_ok");
+  b.send({ event: "ripple:resume", data: { channel: "hist", last_seq: 2 } });
+  const ok = await b.waitFor((f) => f.event === "ripple:resume_ok", "resume_ok");
   const d = JSON.parse(ok.data);
   if (d.replayed !== 2 || d.current_seq !== 4) throw new Error(`bad resume: ${ok.data}`);
   const r3 = b.frames.find((f) => f.event === "ev" && f.seq === 3);
@@ -108,8 +108,8 @@ await step("gap beyond ring buffer -> resume_failed", async () => {
   const c = await client();
   c.send({ event: "pusher:subscribe", data: { channel: "hist" } });
   await c.waitFor((f) => f.event === "pusher_internal:subscription_succeeded", "sub");
-  c.send({ event: "resonance:resume", data: { channel: "hist", last_seq: 2 } });
-  const fail = await c.waitFor((f) => f.event === "resonance:resume_failed", "resume_failed");
+  c.send({ event: "ripple:resume", data: { channel: "hist", last_seq: 2 } });
+  const fail = await c.waitFor((f) => f.event === "ripple:resume_failed", "resume_failed");
   if (JSON.parse(fail.data).reason !== "history_gap") throw new Error(fail.data);
   c.ws.close();
 });
@@ -141,11 +141,11 @@ await step("ADVERSARIAL: resume on private channel without subscribe -> refused,
 
   // attacker: fresh connection, NO subscribe (no auth), straight to resume
   const attacker = await client();
-  attacker.send({ event: "resonance:resume", data: { channel: "private-secrets", last_seq: 0 } });
+  attacker.send({ event: "ripple:resume", data: { channel: "private-secrets", last_seq: 0 } });
   const err = await attacker.waitFor((f) => f.event === "pusher:error", "refusal");
   if (JSON.parse(err.data).code !== 4009) throw new Error(`expected 4009, got ${err.data}`);
   await wait(300);
-  if (attacker.frames.some((f) => f.event === "secret-ev" || f.event === "resonance:resume_ok")) {
+  if (attacker.frames.some((f) => f.event === "secret-ev" || f.event === "ripple:resume_ok")) {
     throw new Error("LEAK: history replayed without authorization");
   }
   attacker.ws.close();
@@ -155,7 +155,7 @@ await step("ADVERSARIAL: subscribe to public then resume a private channel -> re
   const sneaky = await client();
   sneaky.send({ event: "pusher:subscribe", data: { channel: "some-public" } });
   await sneaky.waitFor((f) => f.event === "pusher_internal:subscription_succeeded", "pub sub");
-  sneaky.send({ event: "resonance:resume", data: { channel: "private-secrets", last_seq: 0 } });
+  sneaky.send({ event: "ripple:resume", data: { channel: "private-secrets", last_seq: 0 } });
   const err = await sneaky.waitFor((f) => f.event === "pusher:error", "refusal");
   if (JSON.parse(err.data).code !== 4009) throw new Error(err.data);
   await wait(300);

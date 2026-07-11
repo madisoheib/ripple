@@ -1,6 +1,6 @@
 {
-    "name": "resonance/resonance-laravel",
-    "description": "Laravel broadcasting driver + CLI for the resonance WebSocket server (Pusher-compatible).",
+    "name": "ripple/ripple-laravel",
+    "description": "Laravel broadcasting driver + CLI for the ripple WebSocket server (Pusher-compatible).",
     "license": "MIT",
     "keywords": ["laravel", "broadcasting", "websockets", "pusher", "realtime"],
     "require": {
@@ -12,13 +12,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Resonance\\Laravel\\": "src/"
+            "Ripple\\Laravel\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Resonance\\Laravel\\ResonanceServiceProvider"
+                "Ripple\\Laravel\\RippleServiceProvider"
             ]
         }
     },

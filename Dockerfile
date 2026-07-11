@@ -8,8 +8,8 @@ COPY src ./src
 RUN cargo build --release
 
 FROM scratch
-COPY --from=build /src/target/release/resonance /resonance
-# Default config (change creds via a mounted /resonance.toml or RESONANCE_* env).
-COPY resonance.toml.example /resonance.toml
+COPY --from=build /src/target/release/ripple /ripple
+# Default config (change creds via a mounted /ripple.toml or RIPPLE_* env).
+COPY ripple.toml.example /ripple.toml
 EXPOSE 8080
-ENTRYPOINT ["/resonance", "start", "--config", "/resonance.toml"]
+ENTRYPOINT ["/ripple", "start", "--config", "/ripple.toml"]

@@ -1,4 +1,4 @@
-// End-to-end compat check against a running resonance server, driven by the
+// End-to-end compat check against a running ripple server, driven by the
 // REAL Pusher client libs (spec §4.6): pusher-js subscribes, the `pusher`
 // server lib signs private-channel auth AND the REST trigger exactly like
 // pusher-php-server does. If these pass, a real Laravel/Echo app works too.
@@ -10,9 +10,9 @@ const Pusher = PusherPkg.Pusher || PusherPkg.default || PusherPkg; // CJS/ESM in
 
 globalThis.WebSocket = WebSocket; // pusher-js runtime in Node
 
-const HOST = process.env.RESONANCE_HOST || "127.0.0.1";
-const PORT = Number(process.env.RESONANCE_PORT || 8080);
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const HOST = process.env.RIPPLE_HOST || "127.0.0.1";
+const PORT = Number(process.env.RIPPLE_PORT || 8080);
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 
 const server = new PusherServer({
   appId: APP.id, key: APP.key, secret: APP.secret,

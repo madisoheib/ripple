@@ -1,20 +1,20 @@
-// resonance-resume — client companion for the session-resume extension.
+// ripple-resume — client companion for the session-resume extension.
 //
 // pusher-js and Laravel Echo strip unknown frame fields during decode, so the
 // per-channel `seq` never reaches your event handlers. This wraps the global
 // WebSocket to (1) remember the highest seq seen per channel and (2) send
-// `resonance:resume` right after each (re)subscription succeeds — replaying
+// `ripple:resume` right after each (re)subscription succeeds — replaying
 // exactly the events missed during a disconnect. Transparent to Echo/pusher-js.
 //
 // Usage (before `new Echo(...)` / `new Pusher(...)`):
-//   import { installResonanceResume } from "./resonance-resume.js";
-//   installResonanceResume();
+//   import { installRippleResume } from "./ripple-resume.js";
+//   installRippleResume();
 //
 // Then use Echo normally. On reconnect, missed events are re-delivered through
 // your existing channel bindings — no other code change.
-export function installResonanceResume(target = globalThis) {
+export function installRippleResume(target = globalThis) {
   const Native = target.WebSocket;
-  if (!Native || Native.__resonanceWrapped) return; // idempotent
+  if (!Native || Native.__rippleWrapped) return; // idempotent
 
   // Module-scope, NOT per-socket: pusher-js opens a fresh WebSocket on every
   // reconnect, so per-instance state would reset exactly when resume is needed.
@@ -22,7 +22,7 @@ export function installResonanceResume(target = globalThis) {
   // channel-keyed map is what survives.
   const lastSeq = Object.create(null); // channel -> highest seq seen
 
-  function ResonanceWebSocket(url, protocols) {
+  function RippleWebSocket(url, protocols) {
     const ws = new Native(url, protocols);
 
     ws.addEventListener("message", (evt) => {
@@ -41,7 +41,7 @@ export function installResonanceResume(target = globalThis) {
         const since = lastSeq[m.channel];
         if (since !== undefined && ws.readyState === Native.OPEN) {
           ws.send(JSON.stringify({
-            event: "resonance:resume",
+            event: "ripple:resume",
             data: { channel: m.channel, last_seq: since },
           }));
         }
@@ -51,12 +51,12 @@ export function installResonanceResume(target = globalThis) {
     return ws;
   }
 
-  ResonanceWebSocket.prototype = Native.prototype;
-  ResonanceWebSocket.CONNECTING = Native.CONNECTING;
-  ResonanceWebSocket.OPEN = Native.OPEN;
-  ResonanceWebSocket.CLOSING = Native.CLOSING;
-  ResonanceWebSocket.CLOSED = Native.CLOSED;
-  ResonanceWebSocket.__resonanceWrapped = true;
+  RippleWebSocket.prototype = Native.prototype;
+  RippleWebSocket.CONNECTING = Native.CONNECTING;
+  RippleWebSocket.OPEN = Native.OPEN;
+  RippleWebSocket.CLOSING = Native.CLOSING;
+  RippleWebSocket.CLOSED = Native.CLOSED;
+  RippleWebSocket.__rippleWrapped = true;
 
-  target.WebSocket = ResonanceWebSocket;
+  target.WebSocket = RippleWebSocket;
 }

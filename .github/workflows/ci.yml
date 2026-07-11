@@ -22,5 +22,5 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-      - run: php resonance-laravel/qa/php_check.php
-      - run: for f in $(find resonance-laravel/src -name '*.php'); do php -l "$f"; done
+      - run: php ripple-laravel/qa/php_check.php
+      - run: for f in $(find ripple-laravel/src -name '*.php'); do php -l "$f"; done

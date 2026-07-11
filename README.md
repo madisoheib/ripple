@@ -1,24 +1,24 @@
-# Resonance
+# Ripple
 
 **Self-hosted, Pusher-compatible WebSocket server for the PHP ecosystem — a single static binary.**
 
-[![CI](https://github.com/madisoheib/wrs-php/actions/workflows/ci.yml/badge.svg)](https://github.com/madisoheib/wrs-php/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/madisoheib/wrs-php)](https://github.com/madisoheib/wrs-php/releases)
+[![CI](https://github.com/madisoheib/ripple/actions/workflows/ci.yml/badge.svg)](https://github.com/madisoheib/ripple/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/madisoheib/ripple)](https://github.com/madisoheib/ripple/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Resonance speaks the Pusher Channels protocol, so every existing client works
+Ripple speaks the Pusher Channels protocol, so every existing client works
 unchanged: **Laravel Echo**, **pusher-js**, **pusher-php-server**, mobile SDKs.
 No Redis, no Node, no PHP extensions — download one binary and run it.
 
 ```bash
-./resonance start --config resonance.toml
+./ripple start --config ripple.toml
 ```
 
 ## How it compares
 
 ### The market
 
-| | Pusher / Ably | Laravel Reverb | Soketi | **Resonance** |
+| | Pusher / Ably | Laravel Reverb | Soketi | **Ripple** |
 |---|---|---|---|---|
 | Model | SaaS (paid per connection/message) | self-hosted | self-hosted | **self-hosted** |
 | Runtime required | — | PHP + `ext-ev`/`ext-uv` beyond ~1k conns | Node.js | **none — static binary** |
@@ -29,12 +29,12 @@ No Redis, no Node, no PHP extensions — download one binary and run it.
 | Slow-client protection | managed | ❌ unbounded buffering | partial (backpressure config) | ✅ bounded buffers + disconnect |
 | Status | commercial | active (Laravel official) | maintenance slowed since 2024 | early (v0) |
 
-### Measured head-to-head — Resonance vs Reverb (Linux, 2 pinned cores each)
+### Measured head-to-head — Ripple vs Reverb (Linux, 2 pinned cores each)
 
 AWS c6i.xlarge, servers pinned to 2 cores, full methodology and caveats in
 [`bench/RESULTS.md`](bench/RESULTS.md):
 
-| Metric | Resonance | Reverb (tuned¹) |
+| Metric | Ripple | Reverb (tuned¹) |
 |---|---|---|
 | 60,000 idle connections | ✅ 770 MiB, 100% established | not attempted |
 | Memory @ 40k connections | **512 MiB** (~12.8 KB/conn) | 834 MiB (~20 KB/conn) |
@@ -47,7 +47,7 @@ latency, ~3× less memory, bounded slow-consumer behavior vs unbounded
 buffering. Soketi is absent because we haven't run it on this harness yet —
 we don't publish numbers we didn't measure.
 
-| Metric | Resonance | Reverb (tuned¹) |
+| Metric | Ripple | Reverb (tuned¹) |
 |---|---|---|
 | Baseline memory (0 conns) | **0.9 MiB** | 33 MiB |
 | Idle memory @ 1k conns | **17 MiB** (~16 KB/conn) | 55 MiB (~22 KB/conn) |
@@ -60,9 +60,9 @@ we don't publish numbers we didn't measure.
 | Stock install at 5k conns | ✅ no tuning | ❌ dies at ~1k (`stream_select` fd cap) |
 
 ¹ *Reverb needed `ext-ev`, `memory_limit=-1` and a raised connection limit to
-complete the 5k test; Resonance ran stock. Absolute numbers are specific to
+complete the 5k test; Ripple ran stock. Absolute numbers are specific to
 this hardware (Docker on an 8-core host) — treat them as relative. CPU-core
-ceilings (Reverb: one core; Resonance: all cores) only diverge further at
+ceilings (Reverb: one core; Ripple: all cores) only diverge further at
 scales this harness can't generate; large-scale Linux results will be
 published when available.*
 
@@ -73,14 +73,14 @@ published when available.*
 One-liner (Linux x86_64/ARM64, macOS Intel/Apple Silicon — verifies SHA-256):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/madisoheib/wrs-php/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/madisoheib/ripple/main/install.sh | sh
 ```
 
-Or download manually from [Releases](https://github.com/madisoheib/wrs-php/releases)
+Or download manually from [Releases](https://github.com/madisoheib/ripple/releases)
 (includes Windows), or with Docker:
 
 ```bash
-docker run -p 8080:8080 ghcr.io/madisoheib/wrs-php:latest
+docker run -p 8080:8080 ghcr.io/madisoheib/ripple:latest
 ```
 
 Or build from source: `cargo build --release`.
@@ -88,7 +88,7 @@ Or build from source: `cargo build --release`.
 ### 2. Configure
 
 ```toml
-# resonance.toml
+# ripple.toml
 [server]
 host = "0.0.0.0"
 port = 8080
@@ -104,17 +104,17 @@ activity_timeout_s = 120
 max_channels_per_connection = 100
 ```
 
-Every value can be overridden by environment (`RESONANCE_HOST`, `RESONANCE_PORT`).
+Every value can be overridden by environment (`RIPPLE_HOST`, `RIPPLE_PORT`).
 
 ### 3. Point your app at it
 
 **Laravel** (6 through 13) — use
-[`resonance/resonance-laravel`](https://github.com/madisoheib/resonance-laravel):
+[`ripple/ripple-laravel`](https://github.com/madisoheib/ripple-laravel):
 
 ```bash
-composer require resonance/resonance-laravel
-php artisan resonance:install   # downloads the binary + configures .env (credentials generated)
-php artisan resonance:start
+composer require ripple/ripple-laravel
+php artisan ripple:install   # downloads the binary + configures .env (credentials generated)
+php artisan ripple:start
 ```
 
 **Any PHP** — `pusher-php-server` already speaks the protocol:
@@ -150,9 +150,9 @@ $pusher->trigger('my-channel', 'my-event', ['hello' => 'world']);
   servers): with `history_size = N` on an app, every broadcast frame carries a
   per-channel `seq` (standard clients ignore it — full compat preserved) and
   the server keeps the last N events. After a reconnect, send
-  `{"event":"resonance:resume","data":{"channel":"...","last_seq":X}}` and the
-  missed events are replayed in order (`resonance:resume_ok`), or
-  `resonance:resume_failed` if the gap exceeds the buffer. Mobile-network
+  `{"event":"ripple:resume","data":{"channel":"...","last_seq":X}}` and the
+  missed events are replayed in order (`ripple:resume_ok`), or
+  `ripple:resume_failed` if the gap exceeds the buffer. Mobile-network
   blips and deploys stop losing messages. Ships with a ~40-line Echo/pusher-js
   companion and is authorization-safe (resume requires a prior signed
   subscribe). See [`docs/session-resume.md`](docs/session-resume.md).
@@ -185,7 +185,7 @@ location / {
 }
 ```
 
-Raise `ulimit -n` to at least 2× your target connection count (resonance
+Raise `ulimit -n` to at least 2× your target connection count (ripple
 warns at boot if it's too low).
 
 ## Development

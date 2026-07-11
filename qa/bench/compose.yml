@@ -1,6 +1,6 @@
 services:
-  resonance:
-    image: resonance:qa
+  ripple:
+    image: ripple:qa
     ports:
       - "8080:8080"
     ulimits:
@@ -17,8 +17,8 @@ services:
     environment:
       APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       REVERB_APP_ID: app1
-      REVERB_APP_KEY: resonance-key
-      REVERB_APP_SECRET: resonance-secret
+      REVERB_APP_KEY: ripple-key
+      REVERB_APP_SECRET: ripple-secret
       REVERB_HOST: 0.0.0.0
       REVERB_PORT: "8080"
       REVERB_APP_MAX_CONNECTIONS: "20000"

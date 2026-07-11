@@ -14,7 +14,7 @@ use state::{App, Limits, State};
 use std::sync::Arc;
 
 #[derive(Parser)]
-#[command(name = "resonance", about = "Pusher-compatible WebSocket server")]
+#[command(name = "ripple", about = "Pusher-compatible WebSocket server")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -24,7 +24,7 @@ struct Cli {
 enum Cmd {
     /// Start the server.
     Start {
-        #[arg(short, long, default_value = "resonance.toml")]
+        #[arg(short, long, default_value = "ripple.toml")]
         config: String,
     },
 }
@@ -147,7 +147,7 @@ async fn main() {
     let raw = match std::fs::read_to_string(&config) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Cannot read config '{config}': {e}\nSee resonance.toml.example for a template.");
+            eprintln!("Cannot read config '{config}': {e}\nSee ripple.toml.example for a template.");
             std::process::exit(1);
         }
     };
@@ -160,10 +160,10 @@ async fn main() {
     };
 
     // Env overrides (indispensable for Docker).
-    if let Ok(h) = std::env::var("RESONANCE_HOST") {
+    if let Ok(h) = std::env::var("RIPPLE_HOST") {
         cfg.server.host = h;
     }
-    if let Some(p) = std::env::var("RESONANCE_PORT").ok().and_then(|p| p.parse().ok()) {
+    if let Some(p) = std::env::var("RIPPLE_PORT").ok().and_then(|p| p.parse().ok()) {
         cfg.server.port = p;
     }
 
@@ -187,8 +187,8 @@ async fn main() {
             history_size: a.history_size,
         })
         .collect();
-    // RESONANCE_ALLOWED_ORIGINS="https://a.com,https://b.com" overrides config.
-    if let Ok(v) = std::env::var("RESONANCE_ALLOWED_ORIGINS") {
+    // RIPPLE_ALLOWED_ORIGINS="https://a.com,https://b.com" overrides config.
+    if let Ok(v) = std::env::var("RIPPLE_ALLOWED_ORIGINS") {
         cfg.limits.allowed_origins = v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
     }
     let limits = Limits {
@@ -262,7 +262,7 @@ async fn main() {
             eprintln!("Invalid listen address {addr}: {e}");
             std::process::exit(1);
         });
-        tracing::info!("resonance listening on {addr} (TLS, {} app(s))", state.apps.len());
+        tracing::info!("ripple listening on {addr} (TLS, {} app(s))", state.apps.len());
         // Compose: NoDelayAcceptor sets TCP_NODELAY, then rustls handshakes.
         let acceptor = axum_server::tls_rustls::RustlsAcceptor::new(rustls_cfg)
             .acceptor(axum_server::accept::NoDelayAcceptor);
@@ -310,7 +310,7 @@ async fn main() {
         let listener = axum::serve::ListenerExt::tap_io(listener, |io| {
             let _ = io.set_nodelay(true);
         });
-        tracing::info!("resonance listening on {addr} ({} app(s))", state.apps.len());
+        tracing::info!("ripple listening on {addr} ({} app(s))", state.apps.len());
         // Stop accepting on signal; connection tasks close themselves (1001).
         let graceful = {
             let mut rx = shutdown_rx.clone();

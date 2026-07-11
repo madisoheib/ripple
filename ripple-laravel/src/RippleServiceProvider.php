@@ -1,43 +1,43 @@
 <?php
 
-namespace Resonance\Laravel;
+namespace Ripple\Laravel;
 
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\ServiceProvider;
 use Pusher\Pusher;
-use Resonance\Laravel\Console\InstallCommand;
-use Resonance\Laravel\Console\StartCommand;
+use Ripple\Laravel\Console\InstallCommand;
+use Ripple\Laravel\Console\StartCommand;
 
-class ResonanceServiceProvider extends ServiceProvider
+class RippleServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/resonance.php', 'resonance');
+        $this->mergeConfigFrom(__DIR__ . '/../config/ripple.php', 'ripple');
 
         // Register the broadcast connection so users only set
-        // BROADCAST_CONNECTION=resonance — no editing of config/broadcasting.php.
+        // BROADCAST_CONNECTION=ripple — no editing of config/broadcasting.php.
         $config = $this->app['config'];
-        $config->set('broadcasting.connections.resonance', array_merge(
-            ['driver' => 'resonance'],
-            $config->get('broadcasting.connections.resonance', []),
+        $config->set('broadcasting.connections.ripple', array_merge(
+            ['driver' => 'ripple'],
+            $config->get('broadcasting.connections.ripple', []),
         ));
     }
 
     public function boot(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/resonance.php' => config_path('resonance.php'),
-        ], 'resonance-config');
+            __DIR__ . '/../config/ripple.php' => config_path('ripple.php'),
+        ], 'ripple-config');
 
         if ($this->app->runningInConsole()) {
             $this->commands([InstallCommand::class, StartCommand::class]);
         }
 
         // The server speaks Pusher, so we build on Laravel's PusherBroadcaster —
-        // ResonanceBroadcaster only normalizes the pusher lib's trigger()
+        // RippleBroadcaster only normalizes the pusher lib's trigger()
         // signature so Laravel 6 through 13 all work with one package version.
-        Broadcast::extend('resonance', function ($app, $config) {
-            $c = config('resonance');
+        Broadcast::extend('ripple', function ($app, $config) {
+            $c = config('ripple');
             $pusher = new Pusher($c['key'], $c['secret'], $c['app_id'], [
                 'host'    => $c['host'],
                 'port'    => (int) $c['port'],
@@ -46,7 +46,7 @@ class ResonanceServiceProvider extends ServiceProvider
                 'encrypted' => $c['scheme'] === 'https',
             ]);
 
-            return new ResonanceBroadcaster($pusher);
+            return new RippleBroadcaster($pusher);
         });
     }
 }

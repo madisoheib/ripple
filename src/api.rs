@@ -169,22 +169,22 @@ pub async fn metrics(AxState(state): AxState<Arc<State>>) -> String {
     use std::sync::atomic::Ordering::Relaxed;
     let m = &state.metrics;
     format!(
-        "# TYPE resonance_connections gauge\n\
-         resonance_connections {}\n\
-         # TYPE resonance_channels gauge\n\
-         resonance_channels {}\n\
-         # TYPE resonance_connections_total counter\n\
-         resonance_connections_total {}\n\
-         # TYPE resonance_events_received_total counter\n\
-         resonance_events_received_total {}\n\
-         # TYPE resonance_messages_sent_total counter\n\
-         resonance_messages_sent_total {}\n\
-         # TYPE resonance_slow_consumers_killed_total counter\n\
-         resonance_slow_consumers_killed_total {}\n\
-         # TYPE resonance_last_fanout_us gauge\n\
-         resonance_last_fanout_us {}\n\
-         # TYPE resonance_last_fanout_targets gauge\n\
-         resonance_last_fanout_targets {}\n",
+        "# TYPE ripple_connections gauge\n\
+         ripple_connections {}\n\
+         # TYPE ripple_channels gauge\n\
+         ripple_channels {}\n\
+         # TYPE ripple_connections_total counter\n\
+         ripple_connections_total {}\n\
+         # TYPE ripple_events_received_total counter\n\
+         ripple_events_received_total {}\n\
+         # TYPE ripple_messages_sent_total counter\n\
+         ripple_messages_sent_total {}\n\
+         # TYPE ripple_slow_consumers_killed_total counter\n\
+         ripple_slow_consumers_killed_total {}\n\
+         # TYPE ripple_last_fanout_us gauge\n\
+         ripple_last_fanout_us {}\n\
+         # TYPE ripple_last_fanout_targets gauge\n\
+         ripple_last_fanout_targets {}\n",
         state.connections.len(),
         state.channels.len(),
         m.connections_total.load(Relaxed),

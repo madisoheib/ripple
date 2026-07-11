@@ -1,4 +1,4 @@
-// Proves the client companion (resonance-resume.js) actually recovers missed
+// Proves the client companion (ripple-resume.js) actually recovers missed
 // events across a reconnect, exercising its real code — seq tracking + resume
 // emission — against a live server. pusher-js's node build uses a bundled
 // WebSocket, so we drive the companion through the same public wrapper a
@@ -11,11 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import PusherServer from "pusher";
 import WebSocket from "ws";
-import { installResonanceResume } from "../resonance-laravel/resources/js/resonance-resume.js";
+import { installRippleResume } from "../ripple-laravel/resources/js/ripple-resume.js";
 
-const APP = { id: "app1", key: "resonance-key", secret: "resonance-secret" };
+const APP = { id: "app1", key: "ripple-key", secret: "ripple-secret" };
 const dir = mkdtempSync(join(tmpdir(), "res-companion-"));
-const cfg = join(dir, "resonance.toml");
+const cfg = join(dir, "ripple.toml");
 writeFileSync(cfg, `
 [server]
 host = "127.0.0.1"
@@ -32,7 +32,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Install the companion onto a browser-like target that exposes `ws`.
 const target = { WebSocket };
-installResonanceResume(target);
+installRippleResume(target);
 const WrappedWS = target.WebSocket;
 
 // A pusher-js-like connection: emits decoded events (seq stripped, like Echo)
@@ -42,7 +42,7 @@ function connect() {
   const events = []; // decoded, seq-stripped — what an app handler sees
   ws.addEventListener("message", (evt) => {
     const m = JSON.parse(evt.data);
-    if (m.event && !m.event.startsWith("pusher") && !m.event.startsWith("resonance:")) {
+    if (m.event && !m.event.startsWith("pusher") && !m.event.startsWith("ripple:")) {
       events.push({ event: m.event, channel: m.channel, data: JSON.parse(m.data) });
     }
     ws.__ready = ws.__ready || m.event === "pusher:connection_established";
@@ -53,7 +53,7 @@ function connect() {
 const ready = (c) => new Promise((res) => { const i = setInterval(() => { if (c.ws.__ready) { clearInterval(i); res(); } }, 10); });
 const subbed = (c) => new Promise((res) => { c.ws.__subbed = false; const i = setInterval(() => { if (c.ws.__subbed) { clearInterval(i); res(); } }, 10); });
 
-const proc = spawn("../target/release/resonance", ["start", "--config", cfg], { stdio: "ignore" });
+const proc = spawn("../target/release/ripple", ["start", "--config", cfg], { stdio: "ignore" });
 await wait(700);
 
 let pass = true;

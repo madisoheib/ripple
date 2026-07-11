@@ -1,10 +1,10 @@
 [package]
-name = "resonance"
+name = "ripple"
 version = "0.0.1"
 edition = "2021"
 
 [[bin]]
-name = "resonance"
+name = "ripple"
 path = "src/main.rs"
 
 [dependencies]

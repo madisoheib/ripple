@@ -2,7 +2,7 @@ name: Release
 
 # Push a tag like v0.1.0 to cross-compile all targets and attach binaries
 # (+ .sha256 sidecars) to the GitHub Release. These are exactly the assets
-# `php artisan resonance:install` downloads.
+# `php artisan ripple:install` downloads.
 on:
   push:
     tags: ['v*']
@@ -50,19 +50,19 @@ jobs:
       - name: Package asset (unix)
         if: runner.os != 'Windows'
         run: |
-          cp target/${{ matrix.target }}/release/resonance resonance-${{ matrix.target }}
-          shasum -a 256 resonance-${{ matrix.target }} > resonance-${{ matrix.target }}.sha256
+          cp target/${{ matrix.target }}/release/ripple ripple-${{ matrix.target }}
+          shasum -a 256 ripple-${{ matrix.target }} > ripple-${{ matrix.target }}.sha256
       - name: Package asset (windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/resonance.exe resonance-${{ matrix.target }}.exe
-          sha256sum resonance-${{ matrix.target }}.exe > resonance-${{ matrix.target }}.exe.sha256
+          cp target/${{ matrix.target }}/release/ripple.exe ripple-${{ matrix.target }}.exe
+          sha256sum ripple-${{ matrix.target }}.exe > ripple-${{ matrix.target }}.exe.sha256
 
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            resonance-${{ matrix.target }}*
+            ripple-${{ matrix.target }}*
 
   docker:
     runs-on: ubuntu-latest

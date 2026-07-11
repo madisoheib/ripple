@@ -1,6 +1,6 @@
 services:
-  resonance:
-    image: resonance:qa
+  ripple:
+    image: ripple:qa
     ports:
       - "8080:8080"
 
@@ -9,13 +9,13 @@ services:
       context: ../..
       dockerfile: qa/laravel/Dockerfile
     depends_on:
-      - resonance
+      - ripple
     environment:
       # Docker env wins over .env (Dotenv doesn't override real env vars).
-      BROADCAST_CONNECTION: resonance
-      RESONANCE_HOST: resonance
-      RESONANCE_PORT: "8080"
-      RESONANCE_SCHEME: http
-      RESONANCE_APP_ID: app1
-      RESONANCE_KEY: resonance-key
-      RESONANCE_SECRET: resonance-secret
+      BROADCAST_CONNECTION: ripple
+      RIPPLE_HOST: ripple
+      RIPPLE_PORT: "8080"
+      RIPPLE_SCHEME: http
+      RIPPLE_APP_ID: app1
+      RIPPLE_KEY: ripple-key
+      RIPPLE_SECRET: ripple-secret

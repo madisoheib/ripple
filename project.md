@@ -1,6 +1,6 @@
 # Technical Specification — Rust WebSocket Server for the PHP Ecosystem
 
-**Working code name:** `resonance`
+**Working code name:** `ripple`
 **Document version:** 0.2 — July 2026
 **Goal:** a self-hosted, Pusher-protocol-compatible, framework-agnostic WebSocket server, distributed as a single binary. A Composer package for Laravel integration as the first adapter.
 
@@ -14,7 +14,7 @@ PHP developers who want performant real-time features must choose between: a pai
 ### 1.2 The three promises (in order)
 1. **Maximum compatibility** — the full Pusher protocol. Every existing Pusher client (Laravel Echo, pusher-js, pusher-php-server, mobile clients) works without modification.
 2. **Performance under load** — maximum connection density per CPU, stable latency as load grows. That's the real gain vs PHP/Node; idle latency is equivalent everywhere.
-3. **Trivial installation** — one static binary, zero Redis, zero Node, zero runtime. `./resonance start` and you're live.
+3. **Trivial installation** — one static binary, zero Redis, zero Node, zero runtime. `./ripple start` and you're live.
 
 ### 1.3 Non-goals (v0/v1)
 - No horizontal multi-instance scaling in v0 (one well-utilized vertical instance already covers tens of thousands of connections).
@@ -27,11 +27,11 @@ PHP developers who want performant real-time features must choose between: a pai
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Repo 1: resonance (Rust)                                    │
+│  Repo 1: ripple (Rust)                                    │
 │  The server. Single binary, Pusher protocol, HTTP API.       │
 └──────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────┐
-│  Repo 2: resonance-laravel (PHP)                             │
+│  Repo 2: ripple-laravel (PHP)                             │
 │  Composer package: broadcast driver, config, artisan         │
 │  command, channel auth. Thin — the logic lives in the core.  │
 └──────────────────────────────────────────────────────────────┘
@@ -43,7 +43,7 @@ PHP developers who want performant real-time features must choose between: a pai
 Browser (Echo/pusher-js)
     │  WSS (Pusher protocol, port 8080)
     ▼
-resonance server (Rust) ◄──── POST /apps/{app_id}/events (HTTP, signed)
+ripple server (Rust) ◄──── POST /apps/{app_id}/events (HTTP, signed)
     │                              ▲
     │  private channel auth        │
     ▼                              │
@@ -71,7 +71,7 @@ Three communication channels, all in Pusher format:
 | `serde` + `serde_json` | Serialization | Pusher messages = JSON |
 | `hmac` + `sha2` | Signatures | REST API auth + private channels (HMAC-SHA256) |
 | `tracing` + `tracing-subscriber` | Structured logs | Observability with zero cost when disabled |
-| `clap` | CLI | `resonance start --config ...` |
+| `clap` | CLI | `ripple start --config ...` |
 | `toml` | Config file | Readable, standard |
 | `rustls` + `tokio-rustls` | Native TLS | No OpenSSL — portable static binary |
 
@@ -214,7 +214,7 @@ Query string: `auth_key`, `auth_timestamp` (±600 s tolerance), `auth_version=1.
 | Laravel `broadcast()` + pusher driver | The full Laravel flow without the dedicated package |
 | Automatic reconnection | Cut the socket, verify the client resubscribes automatically |
 
-**v0 definition of done: an existing Laravel app using Reverb switches to resonance by changing ONLY environment variables (host/port/key/secret). Zero code changes.**
+**v0 definition of done: an existing Laravel app using Reverb switches to ripple by changing ONLY environment variables (host/port/key/secret). Zero code changes.**
 
 ### 4.7 Network and deployment (infra compat)
 - Native TLS (rustls) OR TLS termination at the reverse proxy — support both.
@@ -245,7 +245,7 @@ Query string: `auth_key`, `auth_timestamp` (±600 s tolerance), `auth_version=1.
 ### 5.3 Benchmark methodology (public deliverable)
 - Tool: k6 (WS scenario) or a custom Rust bencher published in the repo.
 - Scenarios: (a) ramp 0→N idle connections, (b) 1k connections + 100 msg/s broadcast on a shared channel, (c) extreme fan-out: 1 event → 10k subscribers, measure p50/p99 delivery.
-- Compare on the **same hardware, same scenario**: resonance vs Reverb vs Soketi. Publish scripts + raw results in `bench/`. Reproducibility is the credibility argument.
+- Compare on the **same hardware, same scenario**: ripple vs Reverb vs Soketi. Publish scripts + raw results in `bench/`. Reproducibility is the credibility argument.
 - Never publish a number a third party cannot reproduce.
 
 ### 5.4 Performance traps to avoid (systematic code review)
@@ -257,22 +257,22 @@ Query string: `auth_key`, `auth_timestamp` (±600 s tolerance), `auth_version=1.
 
 ---
 
-## 6. Composer package `resonance-laravel`
+## 6. Composer package `ripple-laravel`
 
 ### 6.1 Principle: the thinnest possible package
 Since the server is Pusher-compatible, Laravel ALREADY knows how to talk to it via the existing `pusher` driver (custom host/port config). The package adds comfort, not plumbing:
 
 ```
-resonance-laravel/
+ripple-laravel/
 ├── composer.json          # require: php ^8.2, laravel ^11|^12; suggests nothing — zero extensions
-├── config/resonance.php   # host, port, app_id, key, secret, TLS
+├── config/ripple.php   # host, port, app_id, key, secret, TLS
 ├── src/
-│   ├── ResonanceServiceProvider.php   # merges config, registers the driver
-│   ├── ResonanceBroadcaster.php       # extends PusherBroadcaster (reuse, don't rewrite)
+│   ├── RippleServiceProvider.php   # merges config, registers the driver
+│   ├── RippleBroadcaster.php       # extends PusherBroadcaster (reuse, don't rewrite)
 │   └── Console/
 │       ├── InstallCommand.php         # downloads the binary from the GitHub release
 │       │                              #   by OS/arch, drops it in ./bin, chmod +x
-│       └── StartCommand.php           # php artisan resonance:start (runs the binary)
+│       └── StartCommand.php           # php artisan ripple:start (runs the binary)
 └── tests/
 ```
 
@@ -284,7 +284,7 @@ resonance-laravel/
 
 ### 6.3 Future adapters (v2+, only if traction)
 - Symfony bundle (Mercure is SSE; position on bidirectional).
-- Generic PHP client = usage documentation for `pusher-php-server` pointed at resonance (near-zero code).
+- Generic PHP client = usage documentation for `pusher-php-server` pointed at ripple (near-zero code).
 - WordPress plugin if demand exists.
 
 ---
@@ -305,7 +305,7 @@ resonance-laravel/
 ### 7.2 Distribution channels
 1. GitHub Releases (binaries + checksums) — source of truth.
 2. Official Docker image (`FROM scratch`, ~10 MB) on ghcr.io.
-3. `php artisan resonance:install` (see 6.2).
+3. `php artisan ripple:install` (see 6.2).
 4. Later: Homebrew tap, AUR.
 
 ### 7.3 Server config (TOML file + env overrides)
@@ -320,8 +320,8 @@ key = "/path/key.pem"
 
 [[apps]]
 id = "app1"
-key = "resonance-key"
-secret = "resonance-secret"
+key = "ripple-key"
+secret = "ripple-secret"
 max_connections = 0      # 0 = unlimited
 enable_client_events = true
 
@@ -329,7 +329,7 @@ enable_client_events = true
 max_message_size_kb = 10
 activity_timeout_s = 120
 ```
-Every value overridable via environment variable (`RESONANCE_PORT=...`) — essential for Docker.
+Every value overridable via environment variable (`RIPPLE_PORT=...`) — essential for Docker.
 
 ---
 
@@ -361,7 +361,7 @@ Every value overridable via environment variable (`RESONANCE_PORT=...`) — esse
 - Public + private channels, REST events, ping/pong, protocol errors.
 - Single instance, in-memory state, TOML config, rustls TLS.
 - Laravel package: provider + install + start.
-- Switch test: Reverb app → resonance via environment variables only.
+- Switch test: Reverb app → ripple via environment variables only.
 - Published benchmark vs Reverb.
 
 ### v1 — "Production-ready"

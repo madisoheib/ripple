@@ -1,7 +1,7 @@
 # Session resume
 
 Standard Pusher drops every message sent while a client is disconnected — a
-mobile network blip or a deploy silently loses events. Resonance can replay
+mobile network blip or a deploy silently loses events. Ripple can replay
 them. It's an **opt-in extension** that stays fully compatible with Pusher
 clients (the extra `seq` field is ignored by clients that don't understand it).
 
@@ -27,12 +27,12 @@ history_size = 100   # keep the last 100 events per channel for replay
   subscribe) and sends:
 
   ```json
-  {"event":"resonance:resume","data":{"channel":"orders","last_seq":42}}
+  {"event":"ripple:resume","data":{"channel":"orders","last_seq":42}}
   ```
 
   The server replays every buffered event with `seq > 42`, in order, then
-  sends `resonance:resume_ok` `{replayed, current_seq}`. If the gap is larger
-  than the buffer it sends `resonance:resume_failed` `{reason:"history_gap"}`
+  sends `ripple:resume_ok` `{replayed, current_seq}`. If the gap is larger
+  than the buffer it sends `ripple:resume_failed` `{reason:"history_gap"}`
   and the client should refetch state from your API.
 
 **Security:** resume is refused (`4009`) unless the current connection is
@@ -44,22 +44,22 @@ read a private channel's history without authorization.
 
 pusher-js and Echo strip the `seq` field before your handlers see it, so a
 small companion tracks it and emits the resume automatically. Copy
-[`resonance-laravel/resources/js/resonance-resume.js`](../resonance-laravel/resources/js/resonance-resume.js)
+[`ripple-laravel/resources/js/ripple-resume.js`](../ripple-laravel/resources/js/ripple-resume.js)
 into your app and install it **before** creating Echo:
 
 ```js
-import { installResonanceResume } from "./resonance-resume.js";
+import { installRippleResume } from "./ripple-resume.js";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 
-installResonanceResume();           // wraps window.WebSocket
+installRippleResume();           // wraps window.WebSocket
 
 window.Pusher = Pusher;
 window.Echo = new Echo({
     broadcaster: "pusher",
-    key: import.meta.env.VITE_RESONANCE_KEY,
-    wsHost: import.meta.env.VITE_RESONANCE_HOST,
-    wsPort: import.meta.env.VITE_RESONANCE_PORT,
+    key: import.meta.env.VITE_RIPPLE_KEY,
+    wsHost: import.meta.env.VITE_RIPPLE_HOST,
+    wsPort: import.meta.env.VITE_RIPPLE_PORT,
     forceTLS: false,
     enabledTransports: ["ws", "wss"],
 });

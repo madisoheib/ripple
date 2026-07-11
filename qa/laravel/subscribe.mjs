@@ -1,4 +1,4 @@
-// Host-side subscriber: connects to resonance (mapped :8080) via real pusher-js,
+// Host-side subscriber: connects to ripple (mapped :8080) via real pusher-js,
 // subscribes to the public channel the Laravel event broadcasts on, and exits 0
 // when the event arrives. Resolves module deps from ../node_modules.
 import PusherPkg from "pusher-js";
@@ -7,7 +7,7 @@ import WebSocket from "ws";
 const Pusher = PusherPkg.Pusher || PusherPkg.default || PusherPkg;
 globalThis.WebSocket = WebSocket;
 
-const client = new Pusher("resonance-key", {
+const client = new Pusher("ripple-key", {
   wsHost: "127.0.0.1", wsPort: 8080, forceTLS: false,
   disableStats: true, enabledTransports: ["ws"], cluster: "mt1",
 });
