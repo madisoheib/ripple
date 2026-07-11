@@ -30,11 +30,13 @@ Both idle at 0% CPU. Resonance memory is linear from 1k to 60k. The spec target
 | Resonance | 10,000/10,000 | **94 ms** | 139 ms |
 | Reverb | 10,000/10,000 | 122 ms | 164 ms |
 
-Caveat: these figures include the load generator draining 10k messages on the
-shared box; a control run splitting subscribers across 4 client processes
-lowered Resonance's p50 to ~50-70 ms. ~10k socket writes on 2 cores put the
-server-side floor around 15-30 ms for any implementation. Treat the *relative*
-gap as meaningful, the absolute values as an upper bound.
+**Server-side vs end-to-end.** Resonance's `/metrics` exposes the pure
+distribution time (REST arrival -> last enqueue): **4.1 ms for 10,000
+targets** (~2.4M enqueues/s). The remaining ~90 ms of the end-to-end p50 is
+socket-write scheduling plus the load generator draining 10k messages on the
+shared box — a control run with 4 client processes lowered p50 to ~50-70 ms.
+Treat the end-to-end absolutes as an upper bound dominated by the client;
+the relative gap vs Reverb (measured identically) remains meaningful.
 
 ## 3. Sustained broadcast — 2,000 subscribers × 25 events/s = 50,000 deliveries/s, 15 s
 

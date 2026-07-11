@@ -68,6 +68,11 @@ pub struct Metrics {
     pub events_received_total: AtomicU64,  // REST events ingested
     pub messages_sent_total: AtomicU64,    // frames fanned out
     pub slow_consumers_killed_total: AtomicU64,
+    // Server-side distribution time of the last fan-out: REST arrival ->
+    // last try_send returned. Distinguishes server time from client drain
+    // time in end-to-end benchmarks.
+    pub last_fanout_us: AtomicU64,
+    pub last_fanout_targets: AtomicU64,
 }
 
 pub struct State {

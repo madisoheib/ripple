@@ -88,6 +88,8 @@ fn publish(state: &State, app_id: &str, payload: &serde_json::Value) -> Result<(
     }
 
     state.metrics.events_received_total.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let fanout_start = std::time::Instant::now(); // T1: event accepted
+    let mut fanout_targets = 0u64;
     for channel in &channels {
         // Serialize the outgoing frame ONCE per channel; each subscriber gets a
         // cheap refcounted clone (Utf8Bytes/Bytes), never a re-serialization.
@@ -120,6 +122,13 @@ fn publish(state: &State, app_id: &str, payload: &serde_json::Value) -> Result<(
             }
         }
         state.metrics.messages_sent_total.fetch_add(sent, std::sync::atomic::Ordering::Relaxed);
+        fanout_targets += sent;
+    }
+    // T2: last try_send returned — pure server distribution time.
+    if fanout_targets > 0 {
+        use std::sync::atomic::Ordering::Relaxed;
+        state.metrics.last_fanout_us.store(fanout_start.elapsed().as_micros() as u64, Relaxed);
+        state.metrics.last_fanout_targets.store(fanout_targets, Relaxed);
     }
     Ok(())
 }
@@ -141,13 +150,19 @@ pub async fn metrics(AxState(state): AxState<Arc<State>>) -> String {
          # TYPE resonance_messages_sent_total counter\n\
          resonance_messages_sent_total {}\n\
          # TYPE resonance_slow_consumers_killed_total counter\n\
-         resonance_slow_consumers_killed_total {}\n",
+         resonance_slow_consumers_killed_total {}\n\
+         # TYPE resonance_last_fanout_us gauge\n\
+         resonance_last_fanout_us {}\n\
+         # TYPE resonance_last_fanout_targets gauge\n\
+         resonance_last_fanout_targets {}\n",
         state.connections.len(),
         state.channels.len(),
         m.connections_total.load(Relaxed),
         m.events_received_total.load(Relaxed),
         m.messages_sent_total.load(Relaxed),
         m.slow_consumers_killed_total.load(Relaxed),
+        m.last_fanout_us.load(Relaxed),
+        m.last_fanout_targets.load(Relaxed),
     )
 }
 
