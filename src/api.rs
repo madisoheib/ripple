@@ -378,6 +378,7 @@ mod tests {
                 client_event_rate: 10,
             },
             None,
+            tokio::sync::watch::channel(false).1,
         );
 
         let mut lcg: u64 = 0xC0FFEE;

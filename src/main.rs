@@ -54,11 +54,20 @@ struct Server {
     host: String,
     #[serde(default = "default_port")]
     port: u16,
+    #[serde(default = "default_shutdown_timeout")]
+    shutdown_timeout_s: u64,
 }
 impl Default for Server {
     fn default() -> Self {
-        Server { host: default_host(), port: default_port() }
+        Server {
+            host: default_host(),
+            port: default_port(),
+            shutdown_timeout_s: default_shutdown_timeout(),
+        }
     }
+}
+fn default_shutdown_timeout() -> u64 {
+    30
 }
 fn default_host() -> String {
     "0.0.0.0".into()
@@ -187,7 +196,32 @@ async fn main() {
     } else {
         None
     };
-    let state = State::new(apps, limits, webhook_tx);
+    // Graceful shutdown wiring: SIGTERM/SIGINT flips the watch; connection
+    // tasks send 1001 close frames, the listener stops accepting, and we
+    // drain with a configurable timeout.
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        let ctrl_c = tokio::signal::ctrl_c();
+        #[cfg(unix)]
+        {
+            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("install SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => {},
+                _ = term.recv() => {},
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = ctrl_c.await;
+        }
+        tracing::info!("shutdown signal received — closing connections (1001) and draining");
+        let _ = shutdown_tx.send(true);
+    });
+
+    warn_if_ulimit_low();
+
+    let state = State::new(apps, limits, webhook_tx, shutdown_rx.clone());
 
     let app = Router::new()
         .route("/app/{key}", get(ws_route))
@@ -220,11 +254,23 @@ async fn main() {
         // Compose: NoDelayAcceptor sets TCP_NODELAY, then rustls handshakes.
         let acceptor = axum_server::tls_rustls::RustlsAcceptor::new(rustls_cfg)
             .acceptor(axum_server::accept::NoDelayAcceptor);
+        let handle = axum_server::Handle::new();
+        {
+            let handle = handle.clone();
+            let mut rx = shutdown_rx.clone();
+            let t = cfg.server.shutdown_timeout_s;
+            tokio::spawn(async move {
+                let _ = rx.changed().await;
+                handle.graceful_shutdown(Some(std::time::Duration::from_secs(t)));
+            });
+        }
         axum_server::bind(sock_addr)
             .acceptor(acceptor)
+            .handle(handle)
             .serve(app.into_make_service())
             .await
             .unwrap();
+        tracing::info!("drained — bye");
     } else {
         // Explicit large accept backlog: std's default of 128 drops SYNs during
         // connection storms (mass reconnects after a deploy). Capped by
@@ -253,7 +299,53 @@ async fn main() {
             let _ = io.set_nodelay(true);
         });
         tracing::info!("resonance listening on {addr} ({} app(s))", state.apps.len());
-        axum::serve(listener, app).await.unwrap();
+        // Stop accepting on signal; connection tasks close themselves (1001).
+        let graceful = {
+            let mut rx = shutdown_rx.clone();
+            async move {
+                let _ = rx.changed().await;
+            }
+        };
+        let serve_fut = axum::serve(listener, app).with_graceful_shutdown(graceful);
+        let server = tokio::spawn(async move { serve_fut.await });
+        let mut rx = shutdown_rx.clone();
+        tokio::select! {
+            r = server => { r.unwrap().unwrap(); return; } // server ended on its own
+            _ = rx.changed() => {}
+        }
+        // Signal received: drain up to shutdown_timeout_s, then exit regardless.
+        let deadline = std::time::Duration::from_secs(cfg.server.shutdown_timeout_s);
+        let drained = tokio::time::timeout(deadline, async {
+            while !state.connections.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        })
+        .await
+        .is_ok();
+        tracing::info!(
+            "{} — bye",
+            if drained { "drained cleanly" } else { "drain timeout reached, forcing exit" }
+        );
+    }
+}
+
+/// Spec 5.2: refuse to lie in benchmarks — warn at boot when the fd limit
+/// caps connection capacity. Linux-only (reads /proc/self/limits).
+fn warn_if_ulimit_low() {
+    if let Ok(limits) = std::fs::read_to_string("/proc/self/limits") {
+        for line in limits.lines() {
+            if line.starts_with("Max open files") {
+                if let Some(soft) = line.split_whitespace().nth(3).and_then(|v| v.parse::<u64>().ok()) {
+                    if soft < 10_000 {
+                        tracing::warn!(
+                            "open-files limit is {soft} — that caps you at roughly {} connections. \
+                             Raise it (ulimit -n / systemd LimitNOFILE) to at least 2x your target.",
+                            soft / 2
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

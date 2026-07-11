@@ -32,7 +32,7 @@ pub async fn handle(ws: WebSocket, state: Arc<State>, app: App) {
 
     let (mut sink, mut stream) = ws.split();
     let mut rx = rx;
-    let writer = tokio::spawn(async move {
+    let mut writer = tokio::spawn(async move {
         // Batch queued messages per flush: one syscall for a fan-out burst
         // instead of one per message.
         let mut batch: Vec<Message> = Vec::with_capacity(16);
@@ -63,6 +63,7 @@ pub async fn handle(ws: WebSocket, state: Arc<State>, app: App) {
 
     let mut subs: HashSet<String> = HashSet::new();
     let mut rate = RateLimiter::new(state.limits.client_event_rate);
+    let mut shutdown = state.shutdown.clone();
     loop {
         tokio::select! {
             item = stream.next() => {
@@ -86,6 +87,21 @@ pub async fn handle(ws: WebSocket, state: Arc<State>, app: App) {
                 deadline = Instant::now() + grace;
             },
             _ = kill.notified() => break,
+            _ = shutdown.changed() => {
+                // Graceful shutdown: 1001 "going away" goes through the same
+                // FIFO mpsc as app messages, so the writer drains everything
+                // already enqueued BEFORE the close frame hits the socket.
+                use axum::extract::ws::CloseFrame;
+                let _ = tx
+                    .send(Message::Close(Some(CloseFrame { code: 1001, reason: "going away".into() })))
+                    .await;
+                // Drop every Sender clone (channel-state Subs first), otherwise
+                // the writer never sees the queue close and waits out the timeout.
+                cleanup(&state, &app.id, &socket_id, &subs);
+                drop(tx);
+                let _ = tokio::time::timeout(Duration::from_secs(5), &mut writer).await;
+                return;
+            }
         }
     }
 

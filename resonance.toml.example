@@ -1,6 +1,9 @@
 [server]
 host = "0.0.0.0"
 port = 8080
+# Graceful shutdown: on SIGTERM/SIGINT, stop accepting, send 1001 close
+# frames to all clients (after flushing in-flight messages), drain up to:
+shutdown_timeout_s = 30
 
 # Native TLS — omit this table to serve plain ws/http (terminate at your proxy).
 # [tls]

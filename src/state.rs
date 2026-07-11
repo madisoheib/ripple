@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc, watch, Notify};
 
 pub type HmacSha256 = Hmac<Sha256>;
 pub type ChannelKey = (String, String); // (app_id, channel_name)
@@ -82,6 +82,9 @@ pub struct State {
     pub limits: Limits,
     pub webhooks: Option<mpsc::Sender<WebhookEvent>>,
     pub metrics: Metrics,
+    // Flips to true on SIGTERM/SIGINT; every connection task watches it and
+    // sends a 1001 close frame before exiting.
+    pub shutdown: watch::Receiver<bool>,
     socket_seq: AtomicU64,
     socket_hi: u64,
 }
@@ -97,7 +100,12 @@ impl State {
         }
     }
 
-    pub fn new(apps: Vec<App>, limits: Limits, webhooks: Option<mpsc::Sender<WebhookEvent>>) -> Arc<Self> {
+    pub fn new(
+        apps: Vec<App>,
+        limits: Limits,
+        webhooks: Option<mpsc::Sender<WebhookEvent>>,
+        shutdown: watch::Receiver<bool>,
+    ) -> Arc<Self> {
         // ponytail: socket_id hi part seeded from startup nanos; low part is a
         // counter. Unique per run, which is all a Pusher socket_id needs.
         let hi = SystemTime::now()
@@ -111,6 +119,7 @@ impl State {
             limits,
             webhooks,
             metrics: Metrics::default(),
+            shutdown,
             socket_seq: AtomicU64::new(1),
             socket_hi: hi,
         })
