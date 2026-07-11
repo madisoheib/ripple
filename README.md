@@ -153,7 +153,9 @@ $pusher->trigger('my-channel', 'my-event', ['hello' => 'world']);
   `{"event":"resonance:resume","data":{"channel":"...","last_seq":X}}` and the
   missed events are replayed in order (`resonance:resume_ok`), or
   `resonance:resume_failed` if the gap exceeds the buffer. Mobile-network
-  blips and deploys stop losing messages.
+  blips and deploys stop losing messages. Ships with a ~40-line Echo/pusher-js
+  companion and is authorization-safe (resume requires a prior signed
+  subscribe). See [`docs/session-resume.md`](docs/session-resume.md).
 - **Per-app limits** for multi-tenant servers: `max_messages_per_second`
   (REST publishes → 429), `max_channels`, `max_presence_members` — one noisy
   app can't starve the others

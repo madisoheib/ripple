@@ -1,5 +1,6 @@
 use crate::state::{frame, sign, State};
 use axum::extract::ws::Message;
+use axum::response::{IntoResponse, Response};
 use axum::{
     body::Bytes,
     extract::{Path, Query, State as AxState},
@@ -19,7 +20,7 @@ pub async fn events(
     Path(app_id): Path<String>,
     Query(q): Query<BTreeMap<String, String>>,
     body: Bytes,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> Response {
     let app = match state.app_by_id(&app_id) {
         Some(a) => a.clone(),
         None => return err(404, "Unknown app"),
@@ -35,12 +36,12 @@ pub async fn events(
     };
 
     if !state.app_rate_ok(&app, 1) {
-        return err(429, "App message rate limit exceeded");
+        return rate_limited();
     }
     if publish(&state, &app, &payload).is_err() {
         return err(400, "Missing data");
     }
-    (StatusCode::OK, Json(serde_json::json!({})))
+    (StatusCode::OK, Json(serde_json::json!({}))).into_response()
 }
 
 /// POST /apps/{app_id}/batch_events — `{"batch":[{name,channel,data,...}, ...]}`
@@ -50,7 +51,7 @@ pub async fn batch_events(
     Path(app_id): Path<String>,
     Query(q): Query<BTreeMap<String, String>>,
     body: Bytes,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> Response {
     let app = match state.app_by_id(&app_id) {
         Some(a) => a.clone(),
         None => return err(404, "Unknown app"),
@@ -67,12 +68,12 @@ pub async fn batch_events(
         None => return err(400, "Missing batch"),
     };
     if !state.app_rate_ok(&app, batch.len() as u64) {
-        return err(429, "App message rate limit exceeded");
+        return rate_limited();
     }
     for event in batch {
         let _ = publish(&state, &app, event); // skip malformed entries, deliver the rest
     }
-    (StatusCode::OK, Json(serde_json::json!({"batch": []})))
+    (StatusCode::OK, Json(serde_json::json!({"batch": []}))).into_response()
 }
 
 /// Fan an event out to its channel(s). Payload: {name, data, channel|channels, socket_id?}.
@@ -200,7 +201,7 @@ pub async fn channels_index(
     AxState(state): AxState<Arc<State>>,
     Path(app_id): Path<String>,
     Query(q): Query<BTreeMap<String, String>>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> Response {
     let app = match state.app_by_id(&app_id) {
         Some(a) => a.clone(),
         None => return err(404, "Unknown app"),
@@ -227,7 +228,7 @@ pub async fn channels_index(
         }
         out.insert(name.clone(), serde_json::Value::Object(info));
     }
-    (StatusCode::OK, Json(serde_json::json!({"channels": out})))
+    (StatusCode::OK, Json(serde_json::json!({"channels": out}))).into_response()
 }
 
 /// GET /apps/{app_id}/channels/{name} — occupancy + counts for one channel.
@@ -235,7 +236,7 @@ pub async fn channel_show(
     AxState(state): AxState<Arc<State>>,
     Path((app_id, name)): Path<(String, String)>,
     Query(q): Query<BTreeMap<String, String>>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> Response {
     let app = match state.app_by_id(&app_id) {
         Some(a) => a.clone(),
         None => return err(404, "Unknown app"),
@@ -258,7 +259,7 @@ pub async fn channel_show(
             out.insert("occupied".into(), false.into());
         }
     }
-    (StatusCode::OK, Json(serde_json::Value::Object(out)))
+    (StatusCode::OK, Json(serde_json::Value::Object(out))).into_response()
 }
 
 /// GET /apps/{app_id}/channels/{name}/users — presence member ids.
@@ -266,7 +267,7 @@ pub async fn channel_users(
     AxState(state): AxState<Arc<State>>,
     Path((app_id, name)): Path<(String, String)>,
     Query(q): Query<BTreeMap<String, String>>,
-) -> (StatusCode, Json<serde_json::Value>) {
+) -> Response {
     let app = match state.app_by_id(&app_id) {
         Some(a) => a.clone(),
         None => return err(404, "Unknown app"),
@@ -288,7 +289,7 @@ pub async fn channel_users(
             }
         }
     }
-    (StatusCode::OK, Json(serde_json::json!({"users": users})))
+    (StatusCode::OK, Json(serde_json::json!({"users": users}))).into_response()
 }
 
 /// Verify the Pusher REST auth scheme (what pusher-php-server generates).
@@ -342,11 +343,23 @@ fn verify(
     Ok(())
 }
 
-fn err(code: u16, msg: &str) -> (StatusCode, Json<serde_json::Value>) {
+fn err(code: u16, msg: &str) -> Response {
     (
         StatusCode::from_u16(code).unwrap_or(StatusCode::BAD_REQUEST),
         Json(serde_json::json!({ "error": msg })),
     )
+        .into_response()
+}
+
+/// 429 with Retry-After so well-behaved HTTP clients (and pusher-php-server)
+/// back off. Fixed 1s window, so retrying after 1 second always clears it.
+fn rate_limited() -> Response {
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        [(axum::http::header::RETRY_AFTER, "1")],
+        Json(serde_json::json!({ "error": "App message rate limit exceeded" })),
+    )
+        .into_response()
 }
 
 #[cfg(test)]

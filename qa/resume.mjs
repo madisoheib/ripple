@@ -129,6 +129,40 @@ await step("presence roster capped at 2 unique users", async () => {
   members.forEach((m) => m.ws.close());
 });
 
+await step("ADVERSARIAL: resume on private channel without subscribe -> refused, zero replay", async () => {
+  // seed history on a private channel via a legitimate subscriber
+  const legit = await client();
+  const auth = server.authorizeChannel(legit.socketId, "private-secrets");
+  legit.send({ event: "pusher:subscribe", data: { channel: "private-secrets", auth: auth.auth } });
+  await legit.waitFor((f) => f.event === "pusher_internal:subscription_succeeded", "legit sub");
+  await server.trigger("private-secrets", "secret-ev", JSON.stringify({ password: "hunter2" }));
+  await legit.waitFor((f) => f.event === "secret-ev", "legit receives");
+  legit.ws.close();
+
+  // attacker: fresh connection, NO subscribe (no auth), straight to resume
+  const attacker = await client();
+  attacker.send({ event: "resonance:resume", data: { channel: "private-secrets", last_seq: 0 } });
+  const err = await attacker.waitFor((f) => f.event === "pusher:error", "refusal");
+  if (JSON.parse(err.data).code !== 4009) throw new Error(`expected 4009, got ${err.data}`);
+  await wait(300);
+  if (attacker.frames.some((f) => f.event === "secret-ev" || f.event === "resonance:resume_ok")) {
+    throw new Error("LEAK: history replayed without authorization");
+  }
+  attacker.ws.close();
+});
+
+await step("ADVERSARIAL: subscribe to public then resume a private channel -> refused", async () => {
+  const sneaky = await client();
+  sneaky.send({ event: "pusher:subscribe", data: { channel: "some-public" } });
+  await sneaky.waitFor((f) => f.event === "pusher_internal:subscription_succeeded", "pub sub");
+  sneaky.send({ event: "resonance:resume", data: { channel: "private-secrets", last_seq: 0 } });
+  const err = await sneaky.waitFor((f) => f.event === "pusher:error", "refusal");
+  if (JSON.parse(err.data).code !== 4009) throw new Error(err.data);
+  await wait(300);
+  if (sneaky.frames.some((f) => f.event === "secret-ev")) throw new Error("LEAK across channels");
+  sneaky.ws.close();
+});
+
 await step("app publish quota: burst -> 429s", async () => {
   let rejected = 0;
   const jobs = [];
