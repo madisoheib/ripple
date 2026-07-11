@@ -147,8 +147,67 @@ async fn on_text(
             }
             client_event(state, app, socket_id, tx, subs, &v).await;
         }
+        // Session-resume extension (opt-in, apps with history_size > 0):
+        // {event:"resonance:resume", data:{channel, last_seq}} replays every
+        // buffered event the client missed while disconnected.
+        "resonance:resume" => resume(state, app, tx, subs, &v).await,
         _ => {}
     }
+}
+
+async fn resume(
+    state: &Arc<State>,
+    app: &App,
+    tx: &mpsc::Sender<Message>,
+    subs: &HashSet<String>,
+    v: &serde_json::Value,
+) {
+    let data = v.get("data").cloned().unwrap_or(serde_json::Value::Null);
+    let channel = match data.get("channel").and_then(|c| c.as_str()) {
+        Some(c) => c.to_string(),
+        None => return,
+    };
+    let last_seq = data.get("last_seq").and_then(|s| s.as_u64()).unwrap_or(0);
+    if !subs.contains(&channel) {
+        let _ = tx.send(error_frame(4009, "Must be subscribed to resume")).await;
+        return;
+    }
+
+    // Collect replays under a short read lock, send after release.
+    let (replay, gap, current_seq) = match state.channels.get(&(app.id.clone(), channel.clone())) {
+        Some(cs) => {
+            if cs.seq <= last_seq {
+                (Vec::new(), false, cs.seq) // nothing missed
+            } else {
+                let oldest = cs.history.front().map(|(s, _)| *s).unwrap_or(cs.seq + 1);
+                if oldest > last_seq + 1 {
+                    // events were evicted from the ring buffer — can't resume
+                    (Vec::new(), true, cs.seq)
+                } else {
+                    let msgs: Vec<Message> = cs
+                        .history
+                        .iter()
+                        .filter(|(s, _)| *s > last_seq)
+                        .map(|(_, m)| m.clone())
+                        .collect();
+                    (msgs, false, cs.seq)
+                }
+            }
+        }
+        None => (Vec::new(), false, 0),
+    };
+
+    if gap {
+        let d = serde_json::json!({"reason": "history_gap", "current_seq": current_seq}).to_string();
+        let _ = tx.send(frame("resonance:resume_failed", Some(&channel), d)).await;
+        return;
+    }
+    let replayed = replay.len();
+    for m in replay {
+        let _ = tx.send(m).await;
+    }
+    let d = serde_json::json!({"replayed": replayed, "current_seq": current_seq}).to_string();
+    let _ = tx.send(frame("resonance:resume_ok", Some(&channel), d)).await;
 }
 
 /// Fixed-window rate limiter — good enough for a per-connection cap.
@@ -208,11 +267,19 @@ async fn subscribe(
         return;
     }
 
+    if !channel_quota_ok(state, app, &channel) {
+        let _ = tx.send(error_frame(4100, "App channel limit reached")).await;
+        return;
+    }
     let first = {
+        let created = !state.channels.contains_key(&(app.id.clone(), channel.clone()));
         let mut e = state.channels.entry((app.id.clone(), channel.clone())).or_default();
         let first = e.subscribers.is_empty();
         e.subscribers
             .insert(socket_id.to_string(), Sub { tx: tx.clone(), kill: kill.clone() });
+        if created {
+            *state.app_channels.entry(app.id.clone()).or_insert(0) += 1;
+        }
         first
     };
     subs.insert(channel.clone());
@@ -266,13 +333,41 @@ async fn subscribe_presence(
     };
     let user_info = member.get("user_info").cloned().unwrap_or(serde_json::Value::Null);
 
+    if !channel_quota_ok(state, app, channel) {
+        let _ = tx.send(error_frame(4100, "App channel limit reached")).await;
+        return;
+    }
     // Insert member + build the roster and member_added targets under one
     // short lock, send after release.
     let (roster, added_msg_targets, first, is_new_user) = {
+        let created = !state.channels.contains_key(&(app.id.clone(), channel.to_string()));
         let mut e = state.channels.entry((app.id.clone(), channel.to_string())).or_default();
         let first = e.subscribers.is_empty();
+        let presence_users = e
+            .presence
+            .as_ref()
+            .map(|p| {
+                let mut ids: Vec<&str> = p.values().map(|m| m.user_id.as_str()).collect();
+                ids.sort_unstable();
+                ids.dedup();
+                ids.len()
+            })
+            .unwrap_or(0);
+        let would_be_new = !e
+            .presence
+            .as_ref()
+            .map(|p| p.values().any(|m| m.user_id == user_id))
+            .unwrap_or(false);
+        if app.max_presence_members > 0 && would_be_new && presence_users >= app.max_presence_members {
+            drop(e);
+            let _ = tx.send(error_frame(4100, "Presence channel is over capacity")).await;
+            return;
+        }
         e.subscribers
             .insert(socket_id.to_string(), Sub { tx: tx.clone(), kill: kill.clone() });
+        if created {
+            *state.app_channels.entry(app.id.clone()).or_insert(0) += 1;
+        }
         let presence = e.presence.get_or_insert_with(std::collections::HashMap::new);
         let is_new_user = !presence.values().any(|m| m.user_id == user_id);
         presence.insert(
@@ -402,6 +497,20 @@ fn auth_ok(
     provided.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
+/// Per-app live-channel quota, checked before creating a NEW channel.
+/// ponytail: read-then-create has a small race window at the limit; a couple
+/// of channels over quota under concurrent subscribes is acceptable.
+fn channel_quota_ok(state: &State, app: &App, channel: &str) -> bool {
+    if app.max_channels == 0 {
+        return true;
+    }
+    if state.channels.contains_key(&(app.id.clone(), channel.to_string())) {
+        return true; // joining an existing channel never counts against quota
+    }
+    let live = state.app_channels.get(&app.id).map(|v| *v).unwrap_or(0);
+    live < app.max_channels as i64
+}
+
 fn remove_sub(state: &State, app_id: &str, channel: &str, socket_id: &str) {
     let key: ChannelKey = (app_id.to_string(), channel.to_string());
     let mut removed_member: Option<(String, Vec<Sub>)> = None;
@@ -418,9 +527,17 @@ fn remove_sub(state: &State, app_id: &str, channel: &str, socket_id: &str) {
             }
         }
         if e.subscribers.is_empty() {
-            drop(e);
-            state.channels.remove(&key);
+            // Session-resume: keep the channel alive while it holds history so
+            // reconnecting clients can replay (bounded by history_size and the
+            // per-app channel quota). Without history, free it immediately.
             vacated = true;
+            if e.history.is_empty() {
+                drop(e);
+                state.channels.remove(&key);
+                if let Some(mut c) = state.app_channels.get_mut(app_id) {
+                    *c -= 1;
+                }
+            }
         }
     }
     if let Some((user_id, targets)) = removed_member {
@@ -464,6 +581,10 @@ mod tests {
             secret: "s".into(),
             max_connections: 0,
             webhook_url: None,
+            max_messages_per_second: 0,
+            max_channels: 0,
+            max_presence_members: 0,
+            history_size: 0,
         }
     }
 

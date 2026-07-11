@@ -18,6 +18,13 @@ pub struct App {
     pub secret: String,
     pub max_connections: usize, // 0 = unlimited
     pub webhook_url: Option<String>,
+    // Multi-tenant fairness knobs — 0 = unlimited/off.
+    pub max_messages_per_second: u32,
+    pub max_channels: usize,
+    pub max_presence_members: usize,
+    // Session resume (opt-in extension): keep the last N events per channel
+    // for replay after a reconnect. Off by default — zero hot-path cost.
+    pub history_size: usize,
 }
 
 pub struct Limits {
@@ -55,6 +62,10 @@ pub struct ChannelState {
     pub subscribers: HashMap<String, Sub>,
     // presence channels only: socket_id -> member identity
     pub presence: Option<HashMap<String, PresenceMember>>,
+    // Session-resume extension (apps with history_size > 0): monotonically
+    // increasing per-channel sequence + ring buffer of the last N frames.
+    pub seq: u64,
+    pub history: std::collections::VecDeque<(u64, Message)>,
 }
 
 pub struct WebhookEvent {
@@ -75,10 +86,18 @@ pub struct Metrics {
     pub last_fanout_targets: AtomicU64,
 }
 
+pub struct AppRate {
+    pub window: AtomicU64, // epoch second
+    pub count: AtomicU64,
+}
+
 pub struct State {
     pub apps: Vec<App>, // a handful, from config — linear scan is fine
     pub connections: DashMap<String, Conn>,
     pub channels: DashMap<ChannelKey, ChannelState>,
+    // Per-app counters: publish rate windows + live channel counts.
+    pub app_rates: DashMap<String, AppRate>,
+    pub app_channels: DashMap<String, i64>,
     pub limits: Limits,
     pub webhooks: Option<mpsc::Sender<WebhookEvent>>,
     pub metrics: Metrics,
@@ -116,6 +135,8 @@ impl State {
             apps,
             connections: DashMap::new(),
             channels: DashMap::new(),
+            app_rates: DashMap::new(),
+            app_channels: DashMap::new(),
             limits,
             webhooks,
             metrics: Metrics::default(),
@@ -138,6 +159,27 @@ impl State {
         self.apps.iter().find(|a| a.id == id)
     }
 
+    /// Per-app publish quota (fixed 1s window; race-tolerant by design —
+    /// ponytail: a couple of extra messages at window edges don't matter).
+    pub fn app_rate_ok(&self, app: &App, n: u64) -> bool {
+        if app.max_messages_per_second == 0 {
+            return true;
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let e = self
+            .app_rates
+            .entry(app.id.clone())
+            .or_insert_with(|| AppRate { window: AtomicU64::new(now), count: AtomicU64::new(0) });
+        if e.window.load(Ordering::Relaxed) != now {
+            e.window.store(now, Ordering::Relaxed);
+            e.count.store(0, Ordering::Relaxed);
+        }
+        e.count.fetch_add(n, Ordering::Relaxed) + n <= app.max_messages_per_second as u64
+    }
+
     pub fn app_connection_count(&self, app_id: &str) -> usize {
         // ponytail: O(n) over live connections, only checked at connect time.
         // Add a per-app counter if connect rate ever makes this hot.
@@ -157,6 +199,13 @@ pub fn frame(event: &str, channel: Option<&str>, data: String) -> Message {
         Some(ch) => serde_json::json!({"event": event, "channel": ch, "data": data}),
         None => serde_json::json!({"event": event, "data": data}),
     };
+    Message::Text(Utf8Bytes::from(v.to_string()))
+}
+
+/// Like `frame`, plus a top-level `seq` field (session-resume extension).
+/// Standard Pusher clients ignore unknown fields, so this stays compatible.
+pub fn frame_with_seq(event: &str, channel: &str, data: String, seq: u64) -> Message {
+    let v = serde_json::json!({"event": event, "channel": channel, "data": data, "seq": seq});
     Message::Text(Utf8Bytes::from(v.to_string()))
 }
 

@@ -146,6 +146,17 @@ $pusher->trigger('my-channel', 'my-event', ['hello' => 'world']);
 - Slow-consumer protection: bounded per-connection buffers, non-blocking fan-out,
   laggards are disconnected instead of degrading everyone else
 - Dead-connection eviction (server ping after `activity_timeout`, 30 s grace)
+- **Session resume** (opt-in extension, unique among Pusher-compatible
+  servers): with `history_size = N` on an app, every broadcast frame carries a
+  per-channel `seq` (standard clients ignore it — full compat preserved) and
+  the server keeps the last N events. After a reconnect, send
+  `{"event":"resonance:resume","data":{"channel":"...","last_seq":X}}` and the
+  missed events are replayed in order (`resonance:resume_ok`), or
+  `resonance:resume_failed` if the gap exceeds the buffer. Mobile-network
+  blips and deploys stop losing messages.
+- **Per-app limits** for multi-tenant servers: `max_messages_per_second`
+  (REST publishes → 429), `max_channels`, `max_presence_members` — one noisy
+  app can't starve the others
 - **Graceful shutdown**: SIGTERM/SIGINT stops accepting, flushes each
   connection's in-flight messages, sends a proper `1001 Going Away` close
   frame to every client and drains within `shutdown_timeout_s` (default 30 s)

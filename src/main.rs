@@ -85,6 +85,14 @@ struct AppCfg {
     max_connections: usize,
     #[serde(default)]
     webhook_url: Option<String>,
+    #[serde(default)]
+    max_messages_per_second: u32,
+    #[serde(default)]
+    max_channels: usize,
+    #[serde(default)]
+    max_presence_members: usize,
+    #[serde(default)]
+    history_size: usize,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +181,10 @@ async fn main() {
             secret: a.secret,
             max_connections: a.max_connections,
             webhook_url: a.webhook_url,
+            max_messages_per_second: a.max_messages_per_second,
+            max_channels: a.max_channels,
+            max_presence_members: a.max_presence_members,
+            history_size: a.history_size,
         })
         .collect();
     // RESONANCE_ALLOWED_ORIGINS="https://a.com,https://b.com" overrides config.

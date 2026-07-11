@@ -17,6 +17,16 @@ secret = "resonance-secret"
 max_connections = 0        # 0 = unlimited
 # webhook_url = "https://your-app.com/pusher/webhooks"   # channel_occupied/vacated, member_added/removed
 
+# Multi-tenant fairness (all default 0 = unlimited):
+# max_messages_per_second = 1000   # REST publish quota -> 429 beyond
+# max_channels = 10000             # live channels for this app
+# max_presence_members = 100       # unique users per presence channel
+
+# Session-resume extension (opt-in, Pusher-compatible): keep the last N
+# events per channel; reconnecting clients replay what they missed with
+# {event:"resonance:resume", data:{channel, last_seq}}.
+# history_size = 100
+
 [limits]
 max_message_size_kb = 10
 activity_timeout_s = 120

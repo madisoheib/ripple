@@ -1,4 +1,5 @@
 use crate::state::{frame, sign, State};
+use axum::extract::ws::Message;
 use axum::{
     body::Bytes,
     extract::{Path, Query, State as AxState},
@@ -33,7 +34,10 @@ pub async fn events(
         Err(_) => return err(400, "Invalid body"),
     };
 
-    if publish(&state, &app.id, &payload).is_err() {
+    if !state.app_rate_ok(&app, 1) {
+        return err(429, "App message rate limit exceeded");
+    }
+    if publish(&state, &app, &payload).is_err() {
         return err(400, "Missing data");
     }
     (StatusCode::OK, Json(serde_json::json!({})))
@@ -62,14 +66,17 @@ pub async fn batch_events(
         Some(b) => b,
         None => return err(400, "Missing batch"),
     };
+    if !state.app_rate_ok(&app, batch.len() as u64) {
+        return err(429, "App message rate limit exceeded");
+    }
     for event in batch {
-        let _ = publish(&state, &app.id, event); // skip malformed entries, deliver the rest
+        let _ = publish(&state, &app, event); // skip malformed entries, deliver the rest
     }
     (StatusCode::OK, Json(serde_json::json!({"batch": []})))
 }
 
 /// Fan an event out to its channel(s). Payload: {name, data, channel|channels, socket_id?}.
-fn publish(state: &State, app_id: &str, payload: &serde_json::Value) -> Result<(), ()> {
+fn publish(state: &State, app: &crate::state::App, payload: &serde_json::Value) -> Result<(), ()> {
     let name = payload.get("name").and_then(|n| n.as_str()).unwrap_or("");
     // data is already a JSON-encoded string from the client.
     let data = match payload.get("data") {
@@ -93,21 +100,43 @@ fn publish(state: &State, app_id: &str, payload: &serde_json::Value) -> Result<(
     for channel in &channels {
         // Serialize the outgoing frame ONCE per channel; each subscriber gets a
         // cheap refcounted clone (Utf8Bytes/Bytes), never a re-serialization.
-        let msg = frame(name, Some(channel), data.clone());
-
         // Brief shard lock: clone the subscriber handles (Sender + Notify Arc
         // bumps only — no allocation per subscriber), release before sending.
-        let targets: Vec<crate::state::Sub> = match state
-            .channels
-            .get(&(app_id.to_string(), channel.clone()))
-        {
-            Some(cs) => cs
-                .subscribers
-                .iter()
-                .filter(|(sid, _)| Some(sid.as_str()) != except)
-                .map(|(_, sub)| sub.clone())
-                .collect(),
-            None => continue,
+        let key = (app.id.to_string(), channel.clone());
+        let (msg, targets): (Message, Vec<crate::state::Sub>) = if app.history_size > 0 {
+            // Session-resume path: stamp a per-channel seq and keep the frame
+            // in the ring buffer for replay after reconnects.
+            match state.channels.get_mut(&key) {
+                Some(mut cs) => {
+                    cs.seq += 1;
+                    let m = crate::state::frame_with_seq(name, channel, data.clone(), cs.seq);
+                    let seq = cs.seq;
+                    cs.history.push_back((seq, m.clone()));
+                    while cs.history.len() > app.history_size {
+                        cs.history.pop_front();
+                    }
+                    let targets = cs
+                        .subscribers
+                        .iter()
+                        .filter(|(sid, _)| Some(sid.as_str()) != except)
+                        .map(|(_, sub)| sub.clone())
+                        .collect();
+                    (m, targets)
+                }
+                None => continue,
+            }
+        } else {
+            match state.channels.get(&key) {
+                Some(cs) => (
+                    frame(name, Some(channel), data.clone()),
+                    cs.subscribers
+                        .iter()
+                        .filter(|(sid, _)| Some(sid.as_str()) != except)
+                        .map(|(_, sub)| sub.clone())
+                        .collect(),
+                ),
+                None => continue,
+            }
         };
 
         let mut sent = 0u64;
@@ -369,6 +398,10 @@ mod tests {
                 secret: "s".into(),
                 max_connections: 0,
                 webhook_url: None,
+                max_messages_per_second: 0,
+                max_channels: 0,
+                max_presence_members: 0,
+                history_size: 0,
             }],
             crate::state::Limits {
                 max_message_size: 10240,
@@ -406,8 +439,9 @@ mod tests {
                 serde_json::json!([junk]),
                 serde_json::json!(junk),
             ];
+            let app = state.app_by_id("a").unwrap().clone();
             for p in &payloads {
-                let _ = publish(&state, "a", p); // Err or Ok, but no panic
+                let _ = publish(&state, &app, p); // Err or Ok, but no panic
             }
         }
     }
