@@ -86,9 +86,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Reuse the already-built musl binary instead of recompiling Rust inside
+      # the action (which OOM'd the runner). Scratch image around it.
+      - name: Fetch the released Linux binary
+        run: |
+          curl -sSL -o ripple \
+            "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ripple-x86_64-unknown-linux-musl"
+          chmod +x ripple
       - uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.ci
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}

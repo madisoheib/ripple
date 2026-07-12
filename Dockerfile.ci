@@ -1,0 +1,8 @@
+# CI-only image: wraps the already-compiled musl binary (downloaded from the
+# release) in a scratch image — no in-action Rust rebuild, so no OOM and it's
+# fast. The root Dockerfile still builds from source for local `docker build`.
+FROM scratch
+COPY ripple /ripple
+COPY ripple.toml.example /ripple.toml
+EXPOSE 8080
+ENTRYPOINT ["/ripple", "start", "--config", "/ripple.toml"]
